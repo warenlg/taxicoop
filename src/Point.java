@@ -23,12 +23,12 @@ public class Point {
 	/**
 	 * Latitude du point, non modifiable.
 	 */
-	private double latitude;//TODO choisir unite
+	private double latitude;//TODO choisir unite peut etre remplacer en fonction du pathfinding utilisé
 	
 	/**
 	 * Longitude du point, non modifiable.
 	 */
-	private double longitude;//TODO choisir unite
+	private double longitude;//TODO choisir unite peut etre remplacer en fonction du pathfinding utilisé
 	
 	/**
 	 * liste des voisins du point;
@@ -102,7 +102,7 @@ public class Point {
 	}
 	
 	/**
-	 * 
+	 * retourne la distance entre deux points
 	 * @param destination
 	 * @return
 	 */
@@ -111,20 +111,20 @@ public class Point {
 	}
 	
 	/**
-	 * 
+	 * retourne le temps de trajet entre deux points en secondes
 	 * @param destination
 	 * @return
 	 */
-	public double getTime(Point destination){
-		return getDistance(destination);//TODO mettre formule de calcul et changer en type long
+	public long getTime(Point destination){
+		return (long) getDistance(destination);//TODO mettre formule de calcul
 	}
 	
 	/**
-	 * 
+	 * retourne le prix du trajet entre deux points
 	 * @param destination
 	 * @return
 	 */
 	public double getCost(Point destination) {
-		return this.getTime(destination);//TODO mettre la vrai formule de calcul de cout
+		return (double) getTime(destination);//TODO mettre la vrai formule de calcul de cout
 	}
 }
