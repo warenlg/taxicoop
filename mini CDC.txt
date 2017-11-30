@@ -1,0 +1,28 @@
+tstwp:
+
+1 graph no = ville, arrete cij = temps de trajet tij cout cij, H: cout et temps corrélées
+
+n requetes dans N départ i et destination i+n fenetre temps de trajet ei li, nbr de pers pi
+
+ta taxis dans K départ k, capacité cak, fenetre temps de travail ek lk
+
+cout du voyage: pareil, plus cours chemin en temps
+
+départ d'une route est toujours la source d'un taxi
+
+cout en trajet partagé doit etre inférieur au cout du trajet seul ==> Ratio r a déterminer, pas possible d'avoir une seul client dans un taxi
+
+fonction a maximiser page 2887 bas de la colonne 1
+
+journée découpés en périodes de temps ==> pb statique, requetes non servis reportés à la période suivante.
+
+attention: ici nombre de taxis limité ==> gérer le rajout de passagers en cours de voyage. Gérer le cas des taxis vidé ==> retour au dépot avec suivi de position ?
+
+si taxi déjà en service: départ = prochain noeud du graph sur le trajet.
+
+
+graph:
+liste d'adjacence
+open street maps
+
+pas besoin de classe pour les solutions
