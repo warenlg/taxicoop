@@ -27,7 +27,7 @@ def setup():
     return args
 
 
-def read_dataset(path: str, size: int=None) -> List:
+def read_dataset(path: str, size: int=None, time_window: int=15) -> List:
     """
     Function to read the input CSV file with the taxi requests.
 
@@ -36,10 +36,12 @@ def read_dataset(path: str, size: int=None) -> List:
     For example 2015-January-Yellow.
     There are no more latitude and longitude coordinates after 2016 but only area zones.
     param: size is an upper bound for the number of rows in the CSV we are reading because
-    those CSV files count millions of rows.
+        those CSV files count millions of rows.
 
-    return: a list of taxi requests where one row is
-    [PU_datetime, DO_datetime, PU_longitude, PU_latitude, DO_longitude, DO_latitude]
+    return: a list of taxi requests where one row includes Pick-Up and Drop-Off time windows
+        plus Pick-Up and Drop-Off coordinates
+    [(PU_datetime - 15min, PU_datetime), (DO_datetime, DO_datetime + 15min),
+    (PU_longitude, PU_latitude), (DO_longitude, DO_latitude)]
     """
     log = logging.getLogger("reader")
     fin = open(path, newline="")
@@ -50,37 +52,38 @@ def read_dataset(path: str, size: int=None) -> List:
         reader = csv.reader(fin)
         next(reader) # to not read the headers
         dataset = []
+
+        def datetime(val: str) -> int:
+            datetime = val.split()
+            timestamp = datetime[1].split(":")
+            timestamp = [int(x) for x in timestamp]
+            hour, minutes, seconds = tuple(timestamp)
+            time_absolute = hour*3600 + minutes*60 + seconds
+            return time_absolute
+
         for i, row in enumerate(reader):
             if i % 1000 == 0:
                 sys.stderr.write("%d\r" % i)
             if i >= size:
                 break
             request = []
-            for j, val in enumerate(row):
-                if j in (1, 2):
-                    datetime = val.split()
-                    timestamp = datetime[1].split(":")
-                    timestamp = [int(x) for x in timestamp]
-                    hour, minutes, seconds = tuple(timestamp)
-                    time_absolute = hour*3600 + minutes*60 + seconds
-                    request.append(time_absolute)
-                elif j in (5, 6):
-                    request.append(float(val))
-                elif j in (9, 10):
-                    request.append(float(val))
+            request.append((datetime(row[1]) - time_window*60, datetime(row[1])))
+            request.append((datetime(row[2]), datetime(row[2]) + time_window*60))
+            request.append((float(row[5]), float(row[6])))
+            request.append((float(row[9]), float(row[10])))
             # some requests are corrupted, we don't add them to the dataset
-            if request[0] < request[1]:
+            if request[0][1] < request[1][0]:
                 dataset.append(request)
     finally:
         sys.stderr.write("\n")
         fin.close()
-    return dataset
+    return dataset, len(dataset)
 
 
 def main():
     args = setup()
-    dataset = read_dataset(args.input, args.size)
-    print("len_dataset :", len(dataset)) 
+    dataset, nb_requests = read_dataset(args.input, args.size)
+    print("len_dataset :", nb_requests)
 
 
 if __name__ == "__main__":
