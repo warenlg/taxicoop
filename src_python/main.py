@@ -3,8 +3,10 @@ import csv
 import logging
 import os
 import sys
+from clint.textui import progress
 from typing import Tuple, List
 
+from haversine import haversine
 import numpy
 
 
@@ -77,13 +79,54 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List:
     finally:
         sys.stderr.write("\n")
         fin.close()
-    return dataset, len(dataset)
+    return dataset
+
+
+class Request:
+    """
+    TO DO
+    """
+    def __init__(self, row, passengers=1):
+        self._row = row
+        self.passengers = passengers
+
+    def PU_datetime(self):
+        return self._row[0]
+
+    def DO_datetime(self):
+        return self._row[1]
+
+    def PU_coordinates(self):
+        return self._row[2]
+
+    def DO_coordinates(self):
+        return self._row[3]
+
+
+def build_distance_matrix(dataset, distance):
+    """
+    TO DO
+    """
+    nb_requests = len(dataset)
+    A = numpy.zeros((2*nb_requests, 2*nb_requests))
+    for i, row_i in progress.bar(enumerate(dataset), expected_size=nb_requests):
+        Request_i = Request(row_i)
+        for j, row_j in enumerate(dataset):
+            Request_j = Request(row_j)
+            # Fill the 4 blocks of the adjacency matrix
+            if i != j:  # The main diagonal and the one at the bottom-left part of the matrix are null
+                A[i][j] = distance(Request_i.PU_coordinates(), Request_j.PU_coordinates())
+                A[i + nb_requests][j + nb_requests] = distance(Request_i.DO_coordinates(), Request_j.DO_coordinates())
+                A[i + nb_requests][j] = distance(Request_i.DO_coordinates(), Request_i.PU_coordinates()) 
+            A[i][j + nb_requests] = distance(Request_i.PU_coordinates(), Request_j.DO_coordinates())
+    return A
 
 
 def main():
     args = setup()
-    dataset, nb_requests = read_dataset(args.input, args.size)
-    print("len_dataset :", nb_requests)
+    dataset = read_dataset(args.input, args.size)
+    print("len_dataset :", len(dataset))
+    A = build_distance_matrix(dataset, haversine)
 
 
 if __name__ == "__main__":
