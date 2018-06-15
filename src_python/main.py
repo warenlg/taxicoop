@@ -84,7 +84,12 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List:
 
 class Request:
     """
-    TO DO
+    Class built to access characteristics of the requests in the dataset.
+    param: row: one request extracted from the dataset :
+    [(PU_datetime - 15min, PU_datetime), (DO_datetime, DO_datetime + 15min),
+    (PU_longitude, PU_latitude), (DO_longitude, DO_latitude)]
+    param: passengers: number of passengers involved in the request.
+
     """
     def __init__(self, row, passengers=1):
         self._row = row
@@ -103,9 +108,14 @@ class Request:
         return self._row[3]
 
 
-def build_distance_matrix(dataset, distance):
+def build_distance_matrix(dataset, distance=haversine):
     """
-    TO DO
+    Builds the adjacency matrix of the graph.
+    As it is specified in Santos's paper from 2015, the shape of the matrix is 2*N
+    where N is the number of requests considered in the static resolution.
+    The weights of the edges are the distance between 2 pairs of coordinates.
+    Like in Santos's paper, we choose the Haversine distance and used the following
+    Python package for its calculation https://pypi.org/project/haversine/
     """
     nb_requests = len(dataset)
     A = numpy.zeros((2*nb_requests, 2*nb_requests))
@@ -115,10 +125,15 @@ def build_distance_matrix(dataset, distance):
             Request_j = Request(row_j)
             # Fill the 4 blocks of the adjacency matrix
             if i != j:  # The main diagonal and the one at the bottom-left part of the matrix are null
-                A[i][j] = distance(Request_i.PU_coordinates(), Request_j.PU_coordinates())
-                A[i + nb_requests][j + nb_requests] = distance(Request_i.DO_coordinates(), Request_j.DO_coordinates())
-                A[i + nb_requests][j] = distance(Request_i.DO_coordinates(), Request_i.PU_coordinates()) 
-            A[i][j + nb_requests] = distance(Request_i.PU_coordinates(), Request_j.DO_coordinates())
+                # Avoid distance calculations based on time windows constraints
+                if Request_i.PU_datetime()[0] >= Request_j.PU_datetime()[1]:
+                    A[i][j] = distance(Request_i.PU_coordinates(), Request_j.PU_coordinates())
+                if Request_i.DO_datetime()[0] >= Request_j.DO_datetime()[1]:
+                    A[i + nb_requests][j + nb_requests] = distance(Request_i.DO_coordinates(), Request_j.DO_coordinates())
+                if Request_i.DO_datetime()[0] >= Request_j.PU_datetime()[1]:
+                    A[i + nb_requests][j] = distance(Request_i.DO_coordinates(), Request_i.PU_coordinates()) 
+            if Request_i.PU_datetime()[0] >= Request_j.DO_datetime()[1]:
+                A[i][j + nb_requests] = distance(Request_i.PU_coordinates(), Request_j.DO_coordinates())
     return A
 
 
@@ -126,7 +141,7 @@ def main():
     args = setup()
     dataset = read_dataset(args.input, args.size)
     print("len_dataset :", len(dataset))
-    A = build_distance_matrix(dataset, haversine)
+    A = build_distance_matrix(dataset)
 
 
 if __name__ == "__main__":
