@@ -8,6 +8,7 @@ from utils import request2coordinates, time
 class Solution:
     def __init__(self, requests: List):
         self.requests = requests
+        self.nb_requests = len(requests)
         self.taxis = []
 
     def build_initial_solution(self, beta: float):
@@ -78,15 +79,18 @@ class Solution:
                 + min(delta_destination, key=lambda x: delta_destination.get(x))
         return mu
 
-    def compute_objective_function(self, nb_requests) -> int:  # number of shared rides to maximize
-        return nb_requests - len(self.taxis)
+    def compute_objective_function(self) -> int:  # number of shared rides to maximize
+        private_rides = [taxi for taxi in self.taxis if len(taxi.route)/2 == 1]
+        return self.nb_requests - len(private_rides)
 
-
-class Neighborhood(Solution):
-    def __init(self, requests):
-        super().__init__(requests)
-
-    def switch_requests(self, nb_attempts: int=10):
+    def local_search(self):
+        """
+        TODO
+        """
+        next_solution = self.switch_requests()
+        return next_solution
+        
+    def switch_requests(self, nb_attempts: int=1):
         """
         Operation used in Santos's both 2013 and 2015 paper.
         Permutation of two requests from different routes.
@@ -96,17 +100,17 @@ class Neighborhood(Solution):
                 taxi1, taxi2 = random.sample(self.taxis, 2)
 
                 request1 = random.sample(taxi1.route, 1)
-                taxi1.remove(request1)
+                taxi1.remove(request1[0][1])
                 request2 = random.sample(taxi2.route, 1)
-                taxi2.remove(request2)
-
-                taxi1.insert(request2)
-                taxi2.insert(request1)
+                taxi2.remove(request2[0][1])
+                
+                taxi1.insert(request2[0][1])
+                taxi2.insert(request1[0][1])
+                return self
             except Exception:
                 continue
-
         raise Exception("%d attempts to switch 2 requests reached"
-                        "without finding any valid routes." % nb_attempts)
+                        " without finding any valid routes." % nb_attempts)
 
     def switch_points(self):
         """

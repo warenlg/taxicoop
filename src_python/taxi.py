@@ -35,7 +35,7 @@ class Taxi:
         """
         TODO
         """
-        self.route = [request for request in self.route if request[1] == request]
+        self.route = [req for req in self.route if req[1] == request]
 
     def get_loading_timeline(self) -> List[int]:
         served_request = []
