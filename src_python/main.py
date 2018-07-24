@@ -1,6 +1,7 @@
 import argparse
 import csv
 import logging
+import pickle
 import sys
 from typing import Callable, Dict, List, Tuple
 
@@ -12,10 +13,16 @@ from utils import request2coordinates, time
 
 def setup():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-i", "--input", required=True,
+    parser.add_argument("-i", "--input", type=str,
+                        help="Path to the dataset of taxi requests.")
+    parser.add_argument("--checkpoint-dataset", type=str, required=True,
                         help="Path to the dataset of taxi requests.")
     parser.add_argument("-s", "--size", type=int, default=None,
                         help="Maximum size of the dataset to import.")
+    parser.add_argument("-w", "--time-window", type=int, default=15,
+                        help="Length of the time windows for both pick up and drop off points.")
+    parser.add_argument("--data-saved", action="store_true",
+                        help="Load a static instance of the DARP-M with 4298 requests on 30 sec.")
     parser.add_argument("-t", "--timeframe", type=int, default=1000,
                         help="Time length of a static instance (sec).")
     parser.add_argument("--speed", type=int, default=40,
@@ -83,7 +90,10 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List[List[Tu
             request.append((DO_datetime, DO_datetime + time_window*60))
             request.append(PU_coordinates)
             request.append(DO_coordinates)
-            dataset.append(request)
+            
+            # filtering
+            if PU_coordinates[0] != 0 and DO_coordinates[0] != 0 and DO_datetime - PU_datetime < 12*3600:
+                dataset.append(request)
 
         # sort the requests by Pick-Up datetime
         dataset_sorted = sorted(dataset, key=lambda x: x[0][0])
@@ -118,20 +128,35 @@ def path_relinking(s1, s2):
 
 def main():
     args = setup()
-    dataset = read_dataset(args.input, args.size)
-    requests = initialize_requests(dataset, timeframe=args.timeframe)
+    if args.data_saved:
+        with open(args.checkpoint_dataset, "rb") as f:
+            requests = pickle.load(f)
+    else:
+        dataset = read_dataset(args.input, args.size, args.time_window)
+        requests = initialize_requests(dataset, timeframe=args.timeframe)
+        with open(args.checkpoint_dataset, "wb") as f:
+            pickle.dump(requests, f)
 
     print("Starting GRASP iterations...")
     for i in range(args.num_GRASP):
         print("----- Iteration :", i+1)
-        solution = Solution(requests)
+        solution = Solution(requests[:100])
         solution.build_initial_solution(beta=0.5)
         for i, taxi in enumerate(solution.taxis):
+            print()
             print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
+            seq_id = []
+            seq_time = []
+            for point in taxi.route:
+                seq_id.append(point[1].id)
+                seq_time.append(round(point[0]))
+            print(seq_id)
+            print(seq_time)
         nb_shared_rides = solution.compute_objective_function()
+        print()
         print("Number of shared rides :", nb_shared_rides)
         print("Local search performed...")
-        next_solution = solution.local_search()
+        #next_solution = solution.local_search()
         #next_solution = Neighborhood(solution)
         #print("2 :", next_solution.taxis)
         #next_solution.local_search()

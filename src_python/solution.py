@@ -17,6 +17,7 @@ class Solution:
         """
         self.taxis.append(Taxi(self.requests.pop(0)))
         while len(self.requests) > 0:
+            print("length requests :", len(self.requests))
             # the lower mu is, the better
             mu = self.get_greedy_function(self.taxis[-1], self.requests)
             mu_max = mu[max(mu, key=mu.get)]
