@@ -2,7 +2,7 @@ import random
 from typing import Callable, Dict, List
 
 from taxi import Taxi
-from utils import request2coordinates, time
+from utils import request2coordinates, travel_time
 
 
 class Solution:
@@ -58,19 +58,19 @@ class Solution:
 
                 # u source
                 # >=
-                if v[0] + time(v_point, u.PU_coordinates()) >= u.PU_datetime()[0]:
-                    delta_source[u.id] = time(v_point, u.PU_coordinates()) \
-                        + time(u.PU_coordinates(), v_next_point) - time(v_point, v_next_point)
+                if v[0] + travel_time(v_point, u.PU_coordinates()) >= u.PU_datetime()[0]:
+                    delta_source[u.id] = travel_time(v_point, u.PU_coordinates()) \
+                        + travel_time(u.PU_coordinates(), v_next_point) - travel_time(v_point, v_next_point)
                 # <
                 else:
                     delta_source[u.id] = u.PU_datetime()[0] - v[0] \
-                        + time(u.PU_coordinates(), v_next_point) - time(v_point, v_next_point)
+                        + travel_time(u.PU_coordinates(), v_next_point) - travel_time(v_point, v_next_point)
 
                 # u destination
                 # <=
-                if v[0] + time(v_point, u.DO_coordinates()) <= u.DO_datetime()[1]:
-                    delta_destination[u.id] = time(v_point, u.DO_coordinates()) \
-                        + time(u.DO_coordinates(), v_next_point) - time(v_point, v_next_point)
+                if v[0] + travel_time(v_point, u.DO_coordinates()) <= u.DO_datetime()[1]:
+                    delta_destination[u.id] = travel_time(v_point, u.DO_coordinates()) \
+                        + travel_time(u.DO_coordinates(), v_next_point) - travel_time(v_point, v_next_point)
                 # >
                 else:
                     delta_destination[u.id] = 10000

@@ -1,7 +1,7 @@
 import copy
 from typing import Callable, List
 
-from utils import time
+from utils import travel_time
 
 
 class Taxi:
@@ -12,7 +12,7 @@ class Taxi:
         positive indices stand for PU points when negative indices stand for DO points.
         """
         B_source = request.PU_datetime()[0]
-        B_destination = request.PU_datetime()[0] + time(request.PU_coordinates(), request.DO_coordinates())
+        B_destination = request.PU_datetime()[0] + travel_time(request.PU_coordinates(), request.DO_coordinates())
         # e.g. [(B3_source, request_3, PU_coordinates_3), (B6_source, request_6, PU_coordinates_6),
         #       (B3_destination, request_3, DO_coordinates_3), (B6_destination, request_6, DO_coordinates_6)]
         self.route = [[B_source, request, request.PU_coordinates()], [B_destination, request, request.DO_coordinates()]]
@@ -29,7 +29,7 @@ class Taxi:
             for do in range(pu + 1, len(route1) + 1):
                 try:
                     route2 = copy.deepcopy(route1)
-                    route2.insert(do, [request.PU_datetime()[0] + time(request.PU_coordinates(), request.DO_coordinates()),
+                    route2.insert(do, [request.PU_datetime()[0] + travel_time(request.PU_coordinates(), request.DO_coordinates()),
                                     request, request.DO_coordinates()])
                     self.is_valid(route2)
                     self.update_delivery_datetimes(route2)
@@ -66,7 +66,8 @@ class Taxi:
         """
         check:
         1. the capacity constraint
-        2. the time windows of the passengers
+        2. no stop in a taxi's route
+        3. the time windows of the passengers
         """
 
         # check the capacity constraint
@@ -74,6 +75,10 @@ class Taxi:
         if max(loading_timeline) > self.capacity:
             raise Exception("The maximum number of passengers served at the same time %d"
                             "exceed the taxi capacity %d" % (max(loading_timeline, self.capacity)))
+
+        # no stop in a taxi's route
+        if 0 in loading_timeline[1:-1]:
+            raise Exception("The taxi has to stop after droping the last client in the vehicle.")
 
         # check the time windows of the passengers
         served_requests = []
@@ -92,7 +97,7 @@ class Taxi:
 
     def update_delivery_datetimes(self, route):
         for i in range(len(route)-1):
-            time_to_next_point = time(route[i][2], route[i+1][2])
+            time_to_next_point = travel_time(route[i][2], route[i+1][2])
             if route[i][0] + time_to_next_point > route[i+1][0]:
                 route[i+1][0] = route[i][0] + time_to_next_point
             

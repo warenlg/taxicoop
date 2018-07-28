@@ -3,7 +3,7 @@ from typing import Callable, Tuple
 from haversine import haversine
 
 
-def time(u: Tuple[float], v: Tuple[float], distance: Callable=haversine,
+def travel_time(u: Tuple[float], v: Tuple[float], distance: Callable=haversine,
          speed: int=40/3600) -> float:
     if isinstance(u, tuple) and isinstance(v, tuple):
         return distance(u, v) / speed

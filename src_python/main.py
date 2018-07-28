@@ -3,12 +3,15 @@ import csv
 import logging
 import pickle
 import sys
+import time
 from typing import Callable, Dict, List, Tuple
+
+from matplotlib import pyplot as plt
 
 from request import Request
 from solution import Solution
 from taxi import Taxi
-from utils import request2coordinates, time
+from utils import request2coordinates, travel_time
 
 
 def setup():
@@ -31,6 +34,8 @@ def setup():
                         help="Seat capacity of each taxi, driver not included.")
     parser.add_argument("--alpha", type=float, default=1,
                         help="Customer are paying less than an individual ride times alpha.")
+    parser.add_argument("--beta", type=float, default=0.5,
+                        help="Size of the Restricted Candidate List (RCL) in the insertion method.")
     parser.add_argument("--num-GRASP", type=int, default=10,
                         help="Maximum number of iterations of the GRASP heuristic.")
     logging.basicConfig(level=logging.INFO)
@@ -83,7 +88,7 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List[List[Tu
             DO_coordinates = (float(row[9]), float(row[10]))
             # we do not use the DO datetime from the dataset because we use distances
             # the distance as the crow flies with constant speed
-            DO_datetime = PU_datetime + time(PU_coordinates, DO_coordinates)
+            DO_datetime = PU_datetime + travel_time(PU_coordinates, DO_coordinates)
 
             request = []
             request.append((PU_datetime - time_window*60, PU_datetime))
@@ -138,10 +143,12 @@ def main():
             pickle.dump(requests, f)
 
     print("Starting GRASP iterations...")
+    #import pdb; pdb.set_trace()
+    time_start = time.clock()
     for i in range(args.num_GRASP):
         print("----- Iteration :", i+1)
         solution = Solution(requests[:100])
-        solution.build_initial_solution(beta=0.5)
+        solution.build_initial_solution(beta=args.beta)
         for i, taxi in enumerate(solution.taxis):
             print()
             print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
@@ -156,6 +163,14 @@ def main():
         print()
         print("Number of shared rides :", nb_shared_rides)
         print("Local search performed...")
+        time_elapsed = (time.clock() - time_start)
+        print("Computation time :", round(time_elapsed, 2))
+
+        #print("Visualization...")
+        #fig = plt.figure()
+        #ax = fig.add_subplot(111)
+        #clon, clat = zip(*[(point[2][0], point[2][1]) for point in taxi.route])
+        #ax.plot(clon, clat, ".k")
         #next_solution = solution.local_search()
         #next_solution = Neighborhood(solution)
         #print("2 :", next_solution.taxis)
