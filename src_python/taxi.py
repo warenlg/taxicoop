@@ -42,9 +42,32 @@ class Taxi:
 
     def remove(self, request: Callable):
         """
-        TODO
         """
         self.route = [req for req in self.route if req[1] != request]
+
+    def swap_points(self, pos1: int, pos2: int):
+        """
+        """
+        route = copy.deepcopy(self.route)
+        route[pos1], route[pos2] = route[pos2], route[pos1]
+        served_requests = []
+        for i in range(len(route)):
+            # source point
+            if route[i][1].id not in served_requests:
+                route[i][0] = route[i][1].PU_datetime()[0]
+            
+            # destination point
+            else:
+                route[i][0] = route[i][1].DO_datetime()[0]
+            served_requests.append(route[i][1].id)
+
+        try:  
+            self.is_valid(route)
+            self.update_delivery_datetimes(route)
+            self.is_valid(route)
+            self.route = route
+        except Exception:
+            raise Exception("could not swap point %d and point %d in route %s" % (pos1, pos2, self.route))
 
     def get_loading_timeline(self, route) -> List[int]:
         served_request = []

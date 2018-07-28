@@ -1,4 +1,5 @@
 import random
+import sys
 from typing import Callable, Dict, List
 
 from taxi import Taxi
@@ -17,7 +18,7 @@ class Solution:
         """
         self.taxis.append(Taxi(self.requests.pop(0)))
         while len(self.requests) > 0:
-            print("length requests :", len(self.requests))
+            sys.stderr.write("requests pending : %d\r" % len(self.requests))
             # the lower mu is, the better
             mu = self.get_greedy_function(self.taxis[-1], self.requests)
             mu_max = mu[max(mu, key=mu.get)]
@@ -113,11 +114,21 @@ class Solution:
         raise Exception("%d attempts to switch 2 requests reached"
                         " without finding any valid routes." % nb_attempts)
 
-    def switch_points(self):
+    def switch_points(self, nb_attempts: int=1):
         """
         Operation used only in Santos's 2013 paper.
         Permutation of two consecutive points of the same route.
         """
+        for _ in range(nb_attempts):
+            try:
+                taxi = random.sample(self.taxis, 1)
+                pos1, pos2 = random.sample(range(len(taxi)), 2)
+                taxi.swap(pos1, pos2)
+                return self
+            except Exception:
+                continue
+        raise Exception("%d attempts to swap 2 points of a same request"
+                        " without finding any valid route." % nb_attempts)
 
     def remove_insert_request(self):
         """
