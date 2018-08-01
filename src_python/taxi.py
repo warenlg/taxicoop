@@ -96,12 +96,14 @@ class Taxi:
         # check the capacity constraint
         loading_timeline = self.get_loading_timeline(route)
         if max(loading_timeline) > self.capacity:
-            raise Exception("The maximum number of passengers served at the same time %d"
+            print("The maximum number of passengers served at the same time %d"
                             "exceed the taxi capacity %d" % (max(loading_timeline, self.capacity)))
+            return False
 
         # no stop in a taxi's route
         if 0 in loading_timeline[1:-1]:
-            raise Exception("The taxi has to stop after droping the last client in the vehicle.")
+            print("The taxi has to stop after droping the last client in the vehicle.")
+            return False
 
         # check the time windows of the passengers
         served_requests = []
@@ -109,14 +111,17 @@ class Taxi:
 
             # source point
             if route[i][1].id not in served_requests and route[i][0] > route[i][1].PU_datetime()[1]:
-                raise Exception("The taxi can not pick up the client %d after the end of the time window %d"
+                print("The taxi can not pick up the client %d after the end of the time window %d"
                                 % (route[i][1].id, route[i][1].PU_datetime()[1]))
+                return False
             
             # destination point
             elif route[i][1].id in served_requests and route[i][0] > route[i][1].DO_datetime()[1]:
-                raise Exception("The taxi can not drop off the client %d after the end of the time window %d"
+                print("The taxi can not drop off the client %d after the end of the time window %d"
                                 % (route[i][1].id, route[i][1].DO_datetime()[1]))
+                return False
             served_requests.append(route[i][1].id)
+        return True
 
     def update_delivery_datetimes(self, route):
         for i in range(len(route)-1):

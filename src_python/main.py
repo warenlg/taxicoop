@@ -38,6 +38,8 @@ def setup():
                         help="Size of the Restricted Candidate List (RCL) in the insertion method.")
     parser.add_argument("--num-GRASP", type=int, default=10,
                         help="Maximum number of iterations of the GRASP heuristic.")
+    parser.add_argument("--num-local-search", type=int, default=10,
+                        help="Maximum number of iterations in the local search.")
     logging.basicConfig(level=logging.INFO)
     args = parser.parse_args()
     return args
@@ -143,11 +145,10 @@ def main():
             pickle.dump(requests, f)
 
     print("Starting GRASP iterations...")
-    #import pdb; pdb.set_trace()
     time_start = time.clock()
     for i in range(args.num_GRASP):
         print("----- Iteration :", i+1)
-        solution = Solution(requests[:100])
+        solution = Solution(requests[:200])
         solution.build_initial_solution(beta=args.beta)
         for i, taxi in enumerate(solution.taxis):
             print()
@@ -159,10 +160,14 @@ def main():
                 seq_time.append(round(point[0]))
             print(seq_id)
             print(seq_time)
-        nb_shared_rides = solution.compute_objective_function()
+        nb_shared_rides = solution.compute_f_obj
         print()
         print("Number of shared rides :", nb_shared_rides)
+
         print("Local search performed...")
+        new_solution, new_obj = solution.local_search(args.num_local_search)
+        print("New obj :", new_obj)
+
         time_elapsed = (time.clock() - time_start)
         print("Computation time :", round(time_elapsed, 2))
 

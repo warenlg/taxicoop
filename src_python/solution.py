@@ -1,3 +1,4 @@
+import copy
 import random
 import sys
 from typing import Callable, Dict, List
@@ -81,40 +82,55 @@ class Solution:
                 + min(delta_destination, key=lambda x: delta_destination.get(x))
         return mu
 
-    def compute_objective_function(self) -> int:  # number of shared rides to maximize
+    @property
+    def compute_f_obj(self) -> int:  # number of shared rides to maximize
         private_rides = [taxi for taxi in self.taxis if len(taxi.route)/2 == 1]
         return self.nb_requests - len(private_rides)
 
-    def local_search(self):
+    def local_search(self, max_iter: int=10):
         """
         TODO
         """
-        next_solution = self.switch_requests()
-        return next_solution
+        current_solution = copy.deepcopy(self)
+        current_f_obj = current_solution.compute_f_obj
+        for i in range(max_iter):
+            try:
+                next_solution, id1, id2 = current_solution.swap_requests(100)
+                next_f_obj = next_solution.compute_f_obj
+                print("Success in swaping 2 requests")
+            except Exception:
+                print("No success in swaping 2 requests")
+                continue
+            if next_f_obj > current_f_obj:
+                print("Improve")
+                print("id1 : %d , id2 : %d" % (id1, id2))
+                current_solution = copy.deepcopy(next_solution)
+                current_f_obj = next_f_obj
+        return current_solution, current_f_obj
         
-    def switch_requests(self, nb_attempts: int=1):
+    def swap_requests(self, nb_attempts: int=10):
         """
         Operation used in Santos's both 2013 and 2015 paper.
         Permutation of two requests from different routes.
         """
         for _ in range(nb_attempts):
             try:
-                taxi1, taxi2 = random.sample(self.taxis, 2)
-
+                taxis = copy.deepcopy(self.taxis)
+                taxi1, taxi2 = random.sample(taxis, 2)
                 request1 = random.sample(taxi1.route, 1)
-                taxi1.remove(request1[0][1])
                 request2 = random.sample(taxi2.route, 1)
+                taxi1.remove(request1[0][1])
                 taxi2.remove(request2[0][1])
-                
                 taxi1.insert(request2[0][1])
                 taxi2.insert(request1[0][1])
-                return self
+                self.taxis = taxis
+                return self, request1.id, request2.id
             except Exception:
                 continue
         raise Exception("%d attempts to switch 2 requests reached"
                         " without finding any valid routes." % nb_attempts)
 
-    def switch_points(self, nb_attempts: int=1):
+    def swap_points(self, nb_attempts: int=1):
         """
         Operation used only in Santos's 2013 paper.
         Permutation of two consecutive points of the same route.
