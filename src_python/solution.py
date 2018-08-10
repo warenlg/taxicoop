@@ -17,6 +17,7 @@ class Solution:
         """
         TODO
         """
+        random.shuffle(self.requests)
         self.taxis.append(Taxi(self.requests.pop(0)))
         while len(self.requests) > 0:
             sys.stderr.write("requests pending : %d\r" % len(self.requests))
@@ -60,19 +61,19 @@ class Solution:
 
                 # u source
                 # >=
-                if v[0] + travel_time(v_point, u.PU_coordinates()) >= u.PU_datetime()[0]:
-                    delta_source[u.id] = travel_time(v_point, u.PU_coordinates()) \
-                        + travel_time(u.PU_coordinates(), v_next_point) - travel_time(v_point, v_next_point)
+                if v[0] + travel_time(v_point, u.PU_coordinates) >= u.PU_datetime[0]:
+                    delta_source[u.id] = travel_time(v_point, u.PU_coordinates) \
+                        + travel_time(u.PU_coordinates, v_next_point) - travel_time(v_point, v_next_point)
                 # <
                 else:
-                    delta_source[u.id] = u.PU_datetime()[0] - v[0] \
-                        + travel_time(u.PU_coordinates(), v_next_point) - travel_time(v_point, v_next_point)
+                    delta_source[u.id] = u.PU_datetime[0] - v[0] \
+                        + travel_time(u.PU_coordinates, v_next_point) - travel_time(v_point, v_next_point)
 
                 # u destination
                 # <=
-                if v[0] + travel_time(v_point, u.DO_coordinates()) <= u.DO_datetime()[1]:
-                    delta_destination[u.id] = travel_time(v_point, u.DO_coordinates()) \
-                        + travel_time(u.DO_coordinates(), v_next_point) - travel_time(v_point, v_next_point)
+                if v[0] + travel_time(v_point, u.DO_coordinates) <= u.DO_datetime[1]:
+                    delta_destination[u.id] = travel_time(v_point, u.DO_coordinates) \
+                        + travel_time(u.DO_coordinates, v_next_point) - travel_time(v_point, v_next_point)
                 # >
                 else:
                     delta_destination[u.id] = 10000
@@ -83,52 +84,104 @@ class Solution:
         return mu
 
     @property
-    def compute_f_obj(self) -> int:  # number of shared rides to maximize
+    def compute_obj(self) -> int:  # number of shared rides to maximize
         private_rides = [taxi for taxi in self.taxis if len(taxi.route)/2 == 1]
         return self.nb_requests - len(private_rides)
 
-    def local_search(self, max_iter: int=10):
+    @property
+    def pending_requests(self):
+        pending_requests = set()
+        for taxi in self.taxis:
+            if len(taxi.route) == 2:
+                pending_requests.add(taxi.route[0][1])
+        return pending_requests
+
+    def local_search(self, max_iter: int=10, nb_swap: int=3):
         """
         TODO
         """
         current_solution = copy.deepcopy(self)
-        current_f_obj = current_solution.compute_f_obj
+        current_obj = current_solution.compute_obj
         for i in range(max_iter):
-            try:
-                next_solution, id1, id2 = current_solution.swap_requests(100)
-                next_f_obj = next_solution.compute_f_obj
-                print("Success in swaping 2 requests")
-            except Exception:
-                print("No success in swaping 2 requests")
-                continue
-            if next_f_obj > current_f_obj:
-                print("Improve")
-                print("id1 : %d , id2 : %d" % (id1, id2))
+            next_solution = current_solution.insert_requests(current_solution.pending_requests, nb_attempts=200)
+            next_obj = next_solution.compute_obj
+            if next_obj > current_obj:
                 current_solution = copy.deepcopy(next_solution)
-                current_f_obj = next_f_obj
-        return current_solution, current_f_obj
+                current_obj = next_obj
+                break
+            else:
+                for _ in range(nb_swap):
+                    current_solution.swap_requests()
+        return current_solution, current_obj
+
+    def path_relinking(self, initial_solution):
         
-    def swap_requests(self, nb_attempts: int=10):
+
+
+    def insert_requests(self, requests, nb_attempts=10):
+        for request in requests:
+            for _ in range(nb_attempts):
+                taxi = random.sample(self.taxis, 1)
+                try:
+                    taxi[0].insert(request)
+                    break
+                except Exception:
+                    continue
+        return self
+        
+    def swap_requests(self, nb_attempts: int=100, requests=None):
         """
         Operation used in Santos's both 2013 and 2015 paper.
         Permutation of two requests from different routes.
         """
-        for _ in range(nb_attempts):
+        if requests:
             try:
-                taxis = copy.deepcopy(self.taxis)
-                taxi1, taxi2 = random.sample(taxis, 2)
-                request1 = random.sample(taxi1.route, 1)
-                request2 = random.sample(taxi2.route, 1)
-                taxi1.remove(request1[0][1])
-                taxi2.remove(request2[0][1])
-                taxi1.insert(request2[0][1])
-                taxi2.insert(request1[0][1])
-                self.taxis = taxis
-                return self, request1.id, request2.id
+                solution = copy.deepcopy(self)
+                taxi1, taxi2 = solution.get_taxis_from_requests(requests)
+                taxi1.insert(requests[1])
+                taxi2.insert(requests[0])
+                self = solution
+                return
             except Exception:
-                continue
-        raise Exception("%d attempts to switch 2 requests reached"
-                        " without finding any valid routes." % nb_attempts)
+                print("Failed to swap request %d and request %d" % (requests[0].id, requests[1].id))
+                pass
+        else:
+            for i in range(nb_attempts):
+                delays = copy.deepcopy(self.delays)
+                taxi_id1, taxi_id2 = random.sample(delays[:10], 2)
+                try:
+                    solution = copy.deepcopy(self)
+                    taxi1 = solution.taxis[taxi_id1[0]]
+                    taxi2 = solution.taxis[taxi_id2[0]]
+                    request1 = random.sample(taxi1.route, 1)
+                    request2 = random.sample(taxi2.route, 1)
+                    taxi1.remove(request1[0][1])
+                    taxi2.remove(request2[0][1])
+                    taxi1.insert(request2[0][1])
+                    taxi2.insert(request1[0][1])
+                    self = solution
+                    return
+                except Exception:
+                    continue
+            print("%d attempts to swap 2 requests without success" % nb_attempts)
+
+    def get_taxis_from_requests(self, requests):
+        taxis_serving_requests = []
+        for taxi in self.taxis:
+            while len(requests) > 0:
+                for req in requests:
+                    if any(request[1] == req.id for request in taxi.route):
+                        taxis_serving_requests.append(self.taxis.index(taxi))
+                        requests.remove(req)
+        return taxis_serving_requests
+    
+    @property
+    def delays(self):
+        delays = []
+        for i, taxi in enumerate(self.taxis):
+            delays.append((i, taxi.delay))
+        delays.sort(key=lambda delay: delay[1], reverse=True)
+        return delays
 
     def swap_points(self, nb_attempts: int=1):
         """

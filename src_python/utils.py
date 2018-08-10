@@ -13,8 +13,8 @@ def travel_time(u: Tuple[float], v: Tuple[float], distance: Callable=haversine,
 
 def request2coordinates(request, served_requests):
     if request not in served_requests:
-        v_point = request.PU_coordinates()
+        v_point = request.PU_coordinates
         served_requests.append(request)
     else:
-        v_point = request.PU_coordinates()
+        v_point = request.PU_coordinates
     return v_point, served_requests
