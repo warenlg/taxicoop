@@ -128,12 +128,6 @@ def initialize_requests(dataset, timeframe: int) -> List:
     return requests
 
 
-def path_relinking(s1, s2):
-    """
-    TODO
-    """
-
-
 def main():
     args = setup()
     if args.data_saved:
@@ -147,40 +141,47 @@ def main():
 
     print("Starting GRASP iterations...")
     time_start = time.clock()
-    best_obj = 0
     elite_solution = None
     for i in range(args.num_GRASP):
+        print()
         print("----- Iteration :", i+1)
-        solution = Solution(requests[:200])
+        solution = Solution(requests[:100])
         solution.build_initial_solution(beta=args.beta)
-        nb_shared_rides = solution.compute_obj
-        print("Number of shared rides :", nb_shared_rides)
+        #for i, taxi in enumerate(solution.taxis):
+        #    print()
+        #    print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
+        #    seq_id = []
+        #    seq_time = []
+        #    for point in taxi.route:
+        #        seq_id.append(point[1].id)
+        #        seq_time.append(round(point[0]))
+        #    print(seq_id)
+        #    print(seq_time)
+        init_obj = solution.compute_obj
+        print("Obj init :", init_obj)
 
         print("Local search performed...")
-        new_solution, new_obj = solution.local_search(args.num_local_search)
-        print("Obj after local search :", new_obj)
-        if new_obj > best_obj:
-            best_solution = copy.deepcopy(new_solution)
-            best_obj = new_obj
+        ls_solution, ls_obj = solution.local_search(args.num_local_search)
+        print("Obj after first local search :", ls_obj)
+        
+        print("Path Relinking performed...")
+        if elite_solution:
+            pr_solution = ls_solution.path_relinking(elite_solution)
+            print("Second local search...")
+            ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.num_local_search)
+            print("Obj after local search and path relinking :", ls_pr_obj)
+            if ls_pr_obj > elite_obj:
+                elite_solution = copy.deepcopy(ls_pr_solution)
+                elite_obj = ls_pr_obj
+        else:
+            elite_solution = copy.deepcopy(ls_solution)
+            elite_obj = ls_obj
+        print("Elite obj :", elite_obj)
 
-    print("Best obj after %d iterations of the GRASP heuristic : %d" % (args.num_GRASP, best_obj))
+    print("Best obj after %d iterations of the GRASP heuristic : %d" % (args.num_GRASP, elite_obj))
 
     time_elapsed = (time.clock() - time_start)
     print("Computation time :", round(time_elapsed, 2))
-
-        #print("Visualization...")
-        #fig = plt.figure()
-        #ax = fig.add_subplot(111)
-        #clon, clat = zip(*[(point[2][0], point[2][1]) for point in taxi.route])
-        #ax.plot(clon, clat, ".k")
-        #next_solution = solution.local_search()
-        #next_solution = Neighborhood(solution)
-        #print("2 :", next_solution.taxis)
-        #next_solution.local_search()
-        #next_nb_shared_rides = next_solution.compute_objective_function(nb_requests)
-        #print("Number of shared rides :", next_nb_shared_rides)
-        # solution = path_relinking(s1, s2)
-        # solution.local_search()
 
 
 if __name__ == "__main__":

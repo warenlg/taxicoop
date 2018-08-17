@@ -1,3 +1,4 @@
+from collections import defaultdict
 import copy
 import random
 import sys
@@ -20,7 +21,7 @@ class Solution:
         random.shuffle(self.requests)
         self.taxis.append(Taxi(self.requests.pop(0)))
         while len(self.requests) > 0:
-            sys.stderr.write("requests pending : %d\r" % len(self.requests))
+            #sys.stderr.write("requests pending : %d\r" % len(self.requests))
             # the lower mu is, the better
             mu = self.get_greedy_function(self.taxis[-1], self.requests)
             mu_max = mu[max(mu, key=mu.get)]
@@ -90,10 +91,10 @@ class Solution:
 
     @property
     def pending_requests(self):
-        pending_requests = set()
+        pending_requests = {}
         for taxi in self.taxis:
             if len(taxi.route) == 2:
-                pending_requests.add(taxi.route[0][1])
+                pending_requests[taxi.route[0][1].id] = taxi.route[0][1]
         return pending_requests
 
     def local_search(self, max_iter: int=10, nb_swap: int=3):
@@ -103,7 +104,7 @@ class Solution:
         current_solution = copy.deepcopy(self)
         current_obj = current_solution.compute_obj
         for i in range(max_iter):
-            next_solution = current_solution.insert_requests(current_solution.pending_requests, nb_attempts=200)
+            next_solution = current_solution.insert_requests(list(current_solution.pending_requests.values()), nb_attempts=200)
             next_obj = next_solution.compute_obj
             if next_obj > current_obj:
                 current_solution = copy.deepcopy(next_solution)
@@ -115,7 +116,38 @@ class Solution:
         return current_solution, current_obj
 
     def path_relinking(self, initial_solution):
-        
+        initial_pending_requests = initial_solution.pending_requests
+        self_pending_requests = self.pending_requests
+        pending_commun = [r for r in initial_pending_requests.keys() if r in self_pending_requests.keys()]
+        for r in pending_commun:
+            del initial_pending_requests[r]
+
+        self_routes = self.get_taxis_from_requests(initial_pending_requests.values())
+        other_requests = defaultdict(list)
+        for req_id, taxi in self_routes.items():
+            seq_id = []
+            for point in taxi.route:
+                if point[1].id not in initial_pending_requests.keys() and point[1].id not in seq_id: #and not any(point[1] in x for x in list(other_requests.values())):
+                    other_requests[req_id].append(point[1])
+                seq_id.append(point[1].id)
+
+        visu_other_requests = {}
+        for req_id, list_req in other_requests.items():
+            list_req_id = [r.id for r in list_req]
+            visu_other_requests[req_id] =list_req_id
+
+        potential_routes_in_init = {}
+        for req_id, other_reqs in other_requests.items():
+            init_routes_dict = initial_solution.get_taxis_from_requests(other_reqs)
+            potential_routes_in_init[req_id] = list(init_routes_dict.values())
+
+        for req_id, req in initial_pending_requests.items():
+            for taxi in potential_routes_in_init[req_id]:
+                try:
+                    taxi.insert(req)
+                except Exception:
+                    continue
+        return initial_solution
 
 
     def insert_requests(self, requests, nb_attempts=10):
@@ -137,9 +169,9 @@ class Solution:
         if requests:
             try:
                 solution = copy.deepcopy(self)
-                taxi1, taxi2 = solution.get_taxis_from_requests(requests)
-                taxi1.insert(requests[1])
-                taxi2.insert(requests[0])
+                taxis = solution.get_taxis_from_requests(requests)
+                taxis[requests[0].id].insert(requests[1])
+                taxis[requests[1].id].insert(requests[0])
                 self = solution
                 return
             except Exception:
@@ -165,15 +197,19 @@ class Solution:
                     continue
             print("%d attempts to swap 2 requests without success" % nb_attempts)
 
-    def get_taxis_from_requests(self, requests):
-        taxis_serving_requests = []
+    def get_taxis_from_requests(self, requests) -> Dict:
+        taxis_serving_requests = {}
+        #print("len requests :", len(requests))
         for taxi in self.taxis:
-            while len(requests) > 0:
-                for req in requests:
-                    if any(request[1] == req.id for request in taxi.route):
-                        taxis_serving_requests.append(self.taxis.index(taxi))
-                        requests.remove(req)
-        return taxis_serving_requests
+            for req in requests:
+                if any(request[1].id == req.id for request in taxi.route):
+                    #print("YES")
+                    taxis_serving_requests[req.id] = taxi
+                    #print("alors :", len(taxis_serving_requests))
+                if len(taxis_serving_requests) == len(requests):
+                    return taxis_serving_requests
+        raise Exception("Some requests were not found in the solution")
+        
     
     @property
     def delays(self):
