@@ -144,29 +144,52 @@ def main():
     elite_solution = None
     for i in range(args.num_GRASP):
         print()
+        print()
         print("----- Iteration :", i+1)
-        solution = Solution(requests[:100])
-        solution.build_initial_solution(beta=args.beta)
-        #for i, taxi in enumerate(solution.taxis):
-        #    print()
-        #    print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
-        #    seq_id = []
-        #    seq_time = []
-        #    for point in taxi.route:
-        #        seq_id.append(point[1].id)
-        #        seq_time.append(round(point[0]))
-        #    print(seq_id)
-        #    print(seq_time)
-        init_obj = solution.compute_obj
+        init_solution = Solution(requests[:10])
+        init_solution.build_initial_solution(beta=args.beta)
+
+        for i, taxi in enumerate(init_solution.taxis):
+            print()
+            print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
+            seq_id = []
+            seq_time = []
+            for point in taxi.route:
+                seq_id.append(point[1].id)
+                seq_time.append(round(point[0]))
+            print(seq_id)
+            print(seq_time)
+
+        init_obj = init_solution.compute_obj
         print("Obj init :", init_obj)
+        if init_obj == init_solution.nb_requests:
+            elite_solution = copy.deepcopy(init_solution)
+            elite_obj = init_obj
+            break
 
         print("Local search performed...")
-        ls_solution, ls_obj = solution.local_search(args.num_local_search)
+        ls_solution, ls_obj = init_solution.local_search(args.num_local_search)
+        if ls_obj == ls_solution.nb_requests:
+            elite_solution = copy.deepcopy(ls_solution)
+            elite_obj = ls_obj
+            break
+
+        for i, taxi in enumerate(ls_solution.taxis):
+            print("--")
+            print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
+            seq_id = []
+            seq_time = []
+            for point in taxi.route:
+                seq_id.append(point[1].id)
+                seq_time.append(round(point[0]))
+            print(seq_id)
+            print(seq_time)
         print("Obj after first local search :", ls_obj)
         
         print("Path Relinking performed...")
         if elite_solution:
-            pr_solution = ls_solution.path_relinking(elite_solution)
+            pr_solution, pr_obj = ls_solution.path_relinking(elite_solution)
+            print("Obj after path relinking :", pr_obj)
             print("Second local search...")
             ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.num_local_search)
             print("Obj after local search and path relinking :", ls_pr_obj)

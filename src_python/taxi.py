@@ -19,29 +19,38 @@ class Taxi:
         self.capacity = capacity
         self.speed = speed
 
-    def insert(self, request: Callable):
+    def insert(self, request: Callable, method: str="IA"):
         """
-        TODO
+        IA stands for the exhaustive insertion method
+        IB stands for the heuristic insertion method
         """
-        for pu in range(len(self.route) + 1):
-            route1 = copy.deepcopy(self.route)
-            route1.insert(pu, [request.PU_datetime[0], request, request.PU_coordinates])
-            for do in range(pu + 1, len(route1) + 1):
-                route2 = copy.deepcopy(route1)
-                route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
-                              request, request.DO_coordinates])
-                valid = self.is_valid(route2)
-                self.update_delivery_datetimes(route2)
-                valid *= self.is_valid(route2)
-                if valid:
-                    self.route = route2
-                    return
-        raise Exception("could not insert request %d into the route %s" % (request.id, self.route))
+        if any(r[1].id == request.id for r in self.route):
+            raise Exception("Impossible to insert a request in a route where it is already there")
+        if method is "IA":
+            for pu in range(len(self.route) + 1):
+                route1 = copy.deepcopy(self.route)
+                route1.insert(pu, [request.PU_datetime[0], request, request.PU_coordinates])
+                for do in range(pu + 1, len(route1) + 1):
+                    route2 = copy.deepcopy(route1)
+                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
+                                request, request.DO_coordinates])
+                    valid = self.is_valid(route2)
+                    self.update_delivery_datetimes(route2)
+                    valid *= self.is_valid(route2)
+                    if valid:
+                        self.route = route2
+                        return
+            raise Exception("could not insert request %d into the route %s" % (request.id, self.route))
+
+        if method is "IB":
+            """
+            TODO
+            """
 
     def remove(self, request: Callable):
         """
         """
-        self.route = [req for req in self.route if req[1] != request]
+        self.route = [req for req in self.route if req[1].id != request.id]
 
     def swap(self, pos1: int, pos2: int):
         """
