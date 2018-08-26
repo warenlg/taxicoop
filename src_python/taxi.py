@@ -47,10 +47,10 @@ class Taxi:
             TODO
             """
 
-    def remove(self, request: Callable):
+    def remove(self, request: int):
         """
         """
-        self.route = [req for req in self.route if req[1].id != request.id]
+        self.route = [req for req in self.route if req[1].id != request]
 
     def swap(self, pos1: int, pos2: int):
         """

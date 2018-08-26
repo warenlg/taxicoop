@@ -144,21 +144,9 @@ def main():
     elite_solution = None
     for i in range(args.num_GRASP):
         print()
-        print()
-        print("----- Iteration :", i+1)
-        init_solution = Solution(requests[:10])
+        print("----- Iteration %d -----" % i+1)
+        init_solution = Solution(requests[:500])
         init_solution.build_initial_solution(beta=args.beta)
-
-        for i, taxi in enumerate(init_solution.taxis):
-            print()
-            print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
-            seq_id = []
-            seq_time = []
-            for point in taxi.route:
-                seq_id.append(point[1].id)
-                seq_time.append(round(point[0]))
-            print(seq_id)
-            print(seq_time)
 
         init_obj = init_solution.compute_obj
         print("Obj init :", init_obj)
@@ -167,38 +155,25 @@ def main():
             elite_obj = init_obj
             break
 
-        print("Local search performed...")
+        print("1. Local Search :")
         ls_solution, ls_obj = init_solution.local_search(args.num_local_search)
         if ls_obj == ls_solution.nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
             break
-
-        for i, taxi in enumerate(ls_solution.taxis):
-            print("--")
-            print("number of requests served by taxi %d : %d" % (i, int(len(taxi.route)/2)))
-            seq_id = []
-            seq_time = []
-            for point in taxi.route:
-                seq_id.append(point[1].id)
-                seq_time.append(round(point[0]))
-            print(seq_id)
-            print(seq_time)
-        print("Obj after first local search :", ls_obj)
         
-        print("Path Relinking performed...")
         if elite_solution:
+            print("2. Path Relinking :")
             pr_solution, pr_obj = ls_solution.path_relinking(elite_solution)
-            print("Obj after path relinking :", pr_obj)
-            print("Second local search...")
+            print("3. Second Local Search :")
             ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.num_local_search)
-            print("Obj after local search and path relinking :", ls_pr_obj)
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
                 elite_obj = ls_pr_obj
         else:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
+        print()
         print("Elite obj :", elite_obj)
 
     print("Best obj after %d iterations of the GRASP heuristic : %d" % (args.num_GRASP, elite_obj))
