@@ -8,21 +8,23 @@ class Taxi:
 
     def __init__(self, request, capacity: int=2, speed: int=40):
         """
-        list of request indices in the same order as the taxi drives them.
-        positive indices stand for PU points when negative indices stand for DO points.
+        list of points and corresponding requests in the route of a Taxi in the same order as the taxi travels through them.
+        Each point in self.route is reprensented by (time, request, coordinates).
+        Example of self.route 2 requests served :
+        [(B3_source, request_3, PU_coordinates_3), (B6_source, request_6, PU_coordinates_6),
+        (B3_destination, request_3, DO_coordinates_3), (B6_destination, request_6, DO_coordinates_6)]
         """
         B_source = request.PU_datetime[0]
         B_destination = request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates)
-        # e.g. [(B3_source, request_3, PU_coordinates_3), (B6_source, request_6, PU_coordinates_6),
-        #       (B3_destination, request_3, DO_coordinates_3), (B6_destination, request_6, DO_coordinates_6)]
         self.route = [[B_source, request, request.PU_coordinates], [B_destination, request, request.DO_coordinates]]
         self.capacity = capacity
         self.speed = speed
 
     def insert(self, request: Callable, method: str="IA"):
         """
-        IA stands for the exhaustive insertion method
-        IB stands for the heuristic insertion method
+        Insertion methods describe in Santos 2015.
+        IA stands for the exhaustive  method.
+        IB stands for the heuristic method.
         """
         if any(r[1].id == request.id for r in self.route):
             raise Exception("Impossible to insert a request in a route where it is already there")
@@ -49,11 +51,13 @@ class Taxi:
 
     def remove(self, request: int):
         """
+        Removes the input request from the route.
         """
         self.route = [req for req in self.route if req[1].id != request]
 
     def swap(self, pos1: int, pos2: int):
         """
+        Function to swap points in pos1 and pos2 in the route if valid.
         """
         route = copy.deepcopy(self.route)
         route[pos1], route[pos2] = route[pos2], route[pos1]
@@ -78,6 +82,9 @@ class Taxi:
     
     @property
     def delay(self):
+        """
+        Returns the delay of the route.
+        """
         request_delays = {}
         for point in self.route:
             if point[1].id not in request_delays:
@@ -90,6 +97,9 @@ class Taxi:
         return delay
 
     def get_loading_timeline(self, route) -> List[int]:
+        """
+        Returns the loading timeline of the taxi through its travel.
+        """
         served_request = []
         loading_timeline = [0]
         for x in route:
@@ -99,61 +109,43 @@ class Taxi:
             else:
                 loading_timeline.append(loading_timeline[-1] - 1)
 
-        # for future tests
         assert len(loading_timeline) == len(route) + 1
         assert loading_timeline[-1] == 0
-
         return loading_timeline
 
     def is_valid(self, route) -> bool:
         """
-        check:
-        1. the capacity constraint
-        2. no stop in a taxi's route
-        3. the time windows of the passengers
+        Checks the validity of the route according to the following constraints :
+            1. The capacity constraint
+            2. No stops permitted in the taxi's route
+            3. The time windows of the passengers
         """
-
-        # check the capacity constraint
+        # 1. The capacity constraint
         loading_timeline = self.get_loading_timeline(route)
         if max(loading_timeline) > self.capacity:
-            #print("The maximum number of passengers served at the same time %d"
-            #                "exceed the taxi capacity %d" % (max(loading_timeline, self.capacity)))
             return False
 
-        # no stop in a taxi's route
+        # 2. No stops permitted in the taxi's route
         if 0 in loading_timeline[1:-1]:
-            #print("The taxi has to stop after droping the last client in the vehicle.")
             return False
 
-        # check the time windows of the passengers
+        # The time windows of the passengers
         served_requests = []
         for i in range(len(route)):
-
             # source point
             if route[i][1].id not in served_requests and route[i][0] > route[i][1].PU_datetime[1]:
-                #print("The taxi can not pick up the client %d after the end of the time window %d"
-                 #               % (route[i][1].id, route[i][1].PU_datetime[1]))
                 return False
-            
             # destination point
             elif route[i][1].id in served_requests and route[i][0] > route[i][1].DO_datetime[1]:
-                #print("The taxi can not drop off the client %d after the end of the time window %d"
-                #                % (route[i][1].id, route[i][1].DO_datetime[1]))
                 return False
             served_requests.append(route[i][1].id)
         return True
 
     def update_delivery_datetimes(self, route):
+        """
+        Updates the delivery datetimes of the route after one insertion.
+        """
         for i in range(len(route)-1):
             time_to_next_point = travel_time(route[i][2], route[i+1][2])
             if route[i][0] + time_to_next_point > route[i+1][0]:
                 route[i+1][0] = route[i][0] + time_to_next_point
-            
-            # source point
-            #if self.route[i][1] not in served_requests:
-            #    if self.route[i][0] < self.route[i][1].PU_datetime[0]:
-            #        self.route[i][0] = self.route[i][1].PU_datetime[0]
-            # destination point
-            #else:
-            #    if self.route[i][0] < self.route[i][1].DO_datetime[0]:
-            #        self.route[i][0] = self.route[i][1].DO_datetime[0]

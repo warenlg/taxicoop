@@ -2,7 +2,7 @@ from collections import defaultdict
 import copy
 import random
 import sys
-from typing import Callable, Dict, List, Set, Union
+from typing import Callable, Dict, List, Set, Tuple, Union
 
 from taxi import Taxi
 from utils import request2coordinates, travel_time
@@ -16,7 +16,7 @@ class Solution:
 
     def build_initial_solution(self, beta: float):
         """
-        TODO
+        Builds the initial greedy solution at the beginning of each GRASP iteration.
         """
         requests = copy.deepcopy(list(self.requests.keys()))
         random.shuffle(requests)
@@ -51,6 +51,9 @@ class Solution:
                     continue
 
     def get_greedy_function(self, taxi: Callable, requests: List) -> Dict:
+        """
+        First greedy function detailed in Santos 2015 based on the minimum delay.
+        """
         mu = {}
         for r_id in requests:  # u is the request to insert in the taxi's route
             r = self.requests[r_id]
@@ -89,12 +92,18 @@ class Solution:
         return mu
 
     @property
-    def compute_obj(self) -> int:  # number of shared rides to maximize
+    def compute_obj(self) -> int:
+        """
+        Computes the objective function to maximize i.e. the number of shared rides.
+        """
         private_rides = [taxi for taxi in self.taxis if len(taxi.route)/2 == 1]
         return self.nb_requests - len(private_rides)
 
     @property
     def pending_requests(self):
+        """
+        Returns the requests that are not assigned i.e. assigned to a individual ride in the solution.
+        """
         pending_requests = set()
         for taxi in self.taxis:
             if len(taxi.route) == 2:
@@ -103,7 +112,12 @@ class Solution:
 
     def local_search(self, max_iter: int=10, nb_swap: int=3):
         """
-        TODO
+        Algorithm that performs the local search of the GRASP heuristic.
+        At each iteration :
+            1. We try to insert all pending requests in random routes of the solution.
+            2. If it improves the objective function, we pass to the next iteration.
+            3. If not, we perform a nb_swap number of random swap operations in the solution.
+        At any time the upper bound is reached, we get out of the local search.
         """
         current_solution = copy.deepcopy(self)
         current_obj = current_solution.compute_obj
@@ -125,6 +139,15 @@ class Solution:
 
     def path_relinking(self, initial_solution):
         """
+        Algorithm that performs the path relinking from s1 to s2 of the GRASP heuristic, cf Santos 2015.
+            0. We find the requests that could be inserted i.e. the commun pending requests in s1 and s2.
+               If this set of request is null, there is no need to perform any path relinking
+            1. We merge the pending requests of s1 that are associated in s2.
+            2. We try to insert the pending requests in s1 in the routes they are likely to be accepted according to s2
+               i.e. in the routes that contain requests they are associated with in s2.
+            3. We perform a series of swap of the adjacent requests of those previous requests in order to reduce 
+               the delay of target routes wher to insert the pending requests.
+            4. We apply step 2 again.
         """
         initial_pending_requests = initial_solution.pending_requests
         self_pending_requests = self.pending_requests
@@ -145,13 +168,17 @@ class Solution:
 
         initial_solution, initial_pending_requests = initial_solution.insert_requests(initial_pending_requests, other_requests)
         print("     2. obj :", initial_solution.compute_obj)
-        initial_solution = initial_solution.guided_swap(other_requests)
+        initial_solution = initial_solution.guided_swap(other_requests.values())
         initial_solution, initial_pending_requests = initial_solution.insert_requests(initial_pending_requests, other_requests)
         print("     3. obj :", initial_solution.compute_obj)
         
         return initial_solution, initial_solution.compute_obj
 
     def merge_pending_requests(self, requests_to_merge, other_requests):
+        """
+        Function used in the path relinking that merges the pending requests of the s1 solution
+        that are associated in the s2 solution.
+        """
         nb_requests_to_merge = len(requests_to_merge)
         routes_dict, _ = self.get_taxis_from_requests(requests_to_merge)
         obj_improvments = 0
@@ -161,13 +188,17 @@ class Solution:
             for r2 in other_requests[r1]:
                 if r2 in requests_to_merge:
                     routes_dict[r1].insert(self.requests[r2])
-                    self.remove_request(r2, pending=True)
+                    self.remove_pending_request(r2)
                     requests_to_merge.remove(r2)
                     obj_improvments += 1
         assert obj_improvments == nb_requests_to_merge
         return self
 
-    def get_potential_routes(self, other_requests):
+    def get_potential_routes(self, other_requests: Dict):
+        """
+        Returns a dict where the key is a request (the same as the key in other_requests) 
+        and its value is the list of routes that are serving the corresponding requests in other_requests.
+        """
         potential_routes = {}
         for r_id, other_reqs in other_requests.items():
             routes_dict, _ = self.get_taxis_from_requests(other_reqs)
@@ -175,6 +206,11 @@ class Solution:
         return potential_routes
 
     def insert_requests(self, requests: List, other_requests=None, nb_attempts=1):
+        """
+        Inserts the requests provided as input in :
+            1. the routes that already serve the requests in other_requests if provided.
+            2. random routes of the solution if no other_requests is provided.
+        """
         if other_requests is not None:
             requests_inserted = []
             potential_routes = self.get_potential_routes(other_requests)
@@ -182,7 +218,7 @@ class Solution:
                 for taxi in potential_routes[req_id]:
                     try:
                         taxi.insert(self.requests[req_id])
-                        self.remove_request(req_id, pending=True)
+                        self.remove_pending_request(req_id)
                         improvment = True
                         requests_inserted.append(req_id)
                     except Exception:
@@ -199,20 +235,27 @@ class Solution:
                     if req_id != taxi.route[0][1].id:
                         try:
                             taxi.insert(request)
-                            self.remove_request(req_id, pending=True)
+                            self.remove_pending_request(req_id)
                             break
                         except Exception:
                             continue
             return self
 
-    def remove_request(self, req_id, pending):
+    def remove_pending_request(self, req_id):
+        """
+        Removes pending requests (requests served in an individual route) from a solution,
+        usually because those requests have just been assigned to existing routes of the solution.
+        """
         nb_taxis = len(self.taxis)
-        if pending:
-            self.taxis = [taxi for taxi in self.taxis if not (len(taxi.route) == 2 and taxi.route[0][1].id == req_id)]
-            assert len(self.taxis) == nb_taxis - 1
+        self.taxis = [taxi for taxi in self.taxis if not (len(taxi.route) == 2 and taxi.route[0][1].id == req_id)]
+        assert len(self.taxis) == nb_taxis - 1
 
-    def guided_swap(self, other_requests: Dict):
-        adjacent_requests = set([r for sublist in other_requests.values() for r in sublist])
+    def guided_swap(self, requests: List):
+        """
+        Function used in the path relinking to swap each element of requests with other random requests
+        according to the one direction swap, cf 3. in swap_requests() 
+        """
+        adjacent_requests = set([r for sublist in requests for r in sublist])
         init_routes, init_other_requests = self.get_taxis_from_requests(adjacent_requests)
         nb_succes = 0
         for sublist in init_other_requests.values():
@@ -223,17 +266,16 @@ class Solution:
                     break
                 except Exception:
                     continue
-        #if nb_succes == 0:
-        #    print("no smart swap found")
-        #else:
-        #    print("%d smart swap found over %d" % (nb_succes, len(init_other_requests)))
-        print("    -- nb of guided swap :", nb_succes)
+        print("      -- nb of guided swap :", nb_succes)
         return self
         
-    def swap_requests(self, nb_attempts: int=10, requests=None, delay_improvment=0):
+    def swap_requests(self, nb_attempts: int=1, requests=None, delay_improvment=0):
         """
-        Operation used in Santos's both 2013 and 2015 paper.
-        Permutation of two requests from different routes.
+        Operation used in both Santos 2013 and 2015 : permutation of two requests from different routes.
+        1. If no input requests are provided as input, we try nb_attemps time to swap 2 random requests from the 10 most constrained requests.
+        2. If 2 requests are provided, we try to swap those 2.
+        3. If only one request is provided, we try nb_attempts time to swap this request with another random request,
+            and we keep the swap only if we reduce the dely of the first request's route by delay_improvment.
         """
         if requests is None:
             for i in range(nb_attempts):
@@ -298,9 +340,11 @@ class Solution:
             print("Wrong input :", requests)
 
 
-    def get_taxis_from_requests(self, requests: Union[List, Set]) -> Dict:
+    def get_taxis_from_requests(self, requests: Union[List, Set]) -> Tuple[Dict]:
         """
-        param: requests: list or set of request ids to get the routes from
+        Function used in the path relinking that returns :
+            1. The routes of the current solution serving the requests provided as input.
+            2. The other requests served in the same route as the requests provided as input.
         """
         taxis_serving_requests = {}
         other_requests = defaultdict(set)
@@ -317,6 +361,11 @@ class Solution:
     
     @property
     def delays(self):
+        """
+        Returns the delays of the taxi's route, sorted by decreasing order.
+        Thus, the first element of the list corresponds to the most constrained route
+        i.e. a route likely to recieve a useful swap.
+        """
         delays = []
         for i, taxi in enumerate(self.taxis):
             delays.append((i, taxi.delay))
@@ -339,14 +388,10 @@ class Solution:
         raise Exception("%d attempts to swap 2 points of a same request"
                         " without finding any valid route." % nb_attempts)
 
-    def remove_insert_request(self):
-        """
-        Operation used only in Santos's 2013 paper.
-        Removal of some request from some route and attempt to insert,
-        in this route, some request that was not served.
-        """
-
     def check_no_requests_served_twice(self):
+        """
+        Test function that returns an exception if at leat one request is served twice in the solution.
+        """
         served_requests = [p[1].id for taxi in self.taxis for p in taxi.route]
         if not len(served_requests) / 2 == len(set(served_requests)):
             raise Exception("%d requests are served twice" % (len(served_requests) / 2 - len(set(served_requests))))
