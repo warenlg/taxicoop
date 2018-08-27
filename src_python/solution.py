@@ -14,7 +14,7 @@ class Solution:
         self.nb_requests = len(requests)
         self.taxis = []
 
-    def build_initial_solution(self, beta: float):
+    def build_initial_solution(self, beta: float, limit_RCL=0.2):
         """
         Builds the initial greedy solution at the beginning of each GRASP iteration.
         """
@@ -23,7 +23,7 @@ class Solution:
         random_id = requests.pop(0)
         self.taxis.append(Taxi(self.requests[random_id]))
         while len(requests) > 0:
-            #sys.stderr.write("requests pending : %d\r" % len(self.requests))
+            # sys.stderr.write("requests pending : %d\r" % len(self.requests))
             # the lower mu is, the better
             mu = self.get_greedy_function(self.taxis[-1], requests)
             mu_max = mu[max(mu, key=mu.get)]
@@ -33,8 +33,13 @@ class Solution:
             for r_id, mu_r in mu.items():
                 if mu_r <= RCL_UB:
                     RCL.append(r_id)
+            it = 0
+            max_it = round(len(RCL) * limit_RCL)
             while len(RCL) > 0:
-                r_id = RCL.pop()
+                if it > max_it:
+                    break
+                r_id = RCL.pop(0)
+                it += 1
                 try:
                     self.taxis[-1].insert(self.requests[r_id])
                     requests.remove(r_id)
@@ -43,7 +48,7 @@ class Solution:
                     continue
 
             # no requests can be inserted into the route of the last taxi, so we take a new taxi
-            if len(RCL) == 0:
+            if len(RCL) == 0 or it > max_it:
                 try:
                     random_id = requests.pop(0)
                     self.taxis.append(Taxi(self.requests[random_id]))

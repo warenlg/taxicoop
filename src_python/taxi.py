@@ -36,18 +36,15 @@ class Taxi:
                     route2 = copy.deepcopy(route1)
                     route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
                                 request, request.DO_coordinates])
-                    valid = self.is_valid(route2)
                     self.update_delivery_datetimes(route2)
-                    valid *= self.is_valid(route2)
+                    valid = self.is_valid(route2)
                     if valid:
                         self.route = route2
                         return
             raise Exception("could not insert request %d into the route %s" % (request.id, self.route))
 
-        if method is "IB":
-            """
-            TODO
-            """
+        #if method is "IB":
+
 
     def remove(self, request: int):
         """
