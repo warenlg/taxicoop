@@ -41,6 +41,10 @@ def setup():
                         help="Maximum number of iterations of the GRASP heuristic.")
     parser.add_argument("--num-local-search", type=int, default=10,
                         help="Maximum number of iterations in the local search.")
+    parser.add_argument("--insertion-method", type=str, default="IA", choices=("IA", "IB"),
+                        help="Type of insertion method to use."
+                              "IA stands for the exhaustive method."
+                              "IB stands for the heuristic method.")
     parser.add_argument("--test-size", type=int, default=200,
                         help="Number of requests to consider to test the algorithm.")
     logging.basicConfig(level=logging.INFO)
@@ -148,7 +152,7 @@ def main():
         print()
         print("----- Iteration %d -----" % (i+1))
         init_solution = Solution(requests[:args.test_size])
-        init_solution.build_initial_solution(beta=args.beta)
+        init_solution.build_initial_solution(args.insertion_method, beta=args.beta)
 
         init_obj = init_solution.compute_obj
         print("Obj init :", init_obj)
@@ -158,7 +162,7 @@ def main():
             break
 
         print("1. Local Search :", init_obj)
-        ls_solution, ls_obj = init_solution.local_search(args.num_local_search)
+        ls_solution, ls_obj = init_solution.local_search(args.insertion_method, args.num_local_search)
         if ls_obj == ls_solution.nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
@@ -166,9 +170,9 @@ def main():
         
         if elite_solution:
             print("2. Path Relinking :", ls_obj)
-            pr_solution, pr_obj = ls_solution.path_relinking(elite_solution)
+            pr_solution, pr_obj = ls_solution.path_relinking(elite_solution, args.insertion_method)
             print("3. Second Local Search :", pr_obj)
-            ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.num_local_search)
+            ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.insertion_method, args.num_local_search)
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
                 elite_obj = ls_pr_obj
