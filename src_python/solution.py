@@ -14,7 +14,7 @@ class Solution:
         self.nb_requests = len(requests)
         self.taxis = []
 
-    def build_initial_solution(self, insertion_method, beta: float, limit_RCL=0.2):
+    def build_initial_solution(self, insertion_method, beta: float, limit_RCL=0.1):
         """
         Builds the initial greedy solution at the beginning of each GRASP iteration.
         """
@@ -192,11 +192,14 @@ class Solution:
             obj_improvments += 1
             for r2 in other_requests[r1]:
                 if r2 in requests_to_merge:
-                    routes_dict[r1].insert(self.requests[r2], method=insertion_method)
-                    self.remove_pending_request(r2)
+                    try:
+                        routes_dict[r1].insert(self.requests[r2], method="IB")
+                        self.remove_pending_request(r2)
+                        obj_improvments += 1
+                    except Exception:
+                        pass
                     requests_to_merge.remove(r2)
-                    obj_improvments += 1
-        assert obj_improvments == nb_requests_to_merge
+        assert obj_improvments <= nb_requests_to_merge
         return self
 
     def get_potential_routes(self, other_requests: Dict):
@@ -210,7 +213,7 @@ class Solution:
             potential_routes[r_id] = list(routes_dict.values())
         return potential_routes
 
-    def insert_requests(self, requests: List, insertion_method, other_requests=None, nb_attempts=1):
+    def insert_requests(self, requests: List, insertion_method, other_requests=None, nb_attempts=5):
         """
         Inserts the requests provided as input in :
             1. the routes that already serve the requests in other_requests if provided.
@@ -274,7 +277,7 @@ class Solution:
         print("      -- nb of guided swap :", nb_succes)
         return self
         
-    def swap_requests(self, insertion_method, nb_attempts: int=1, requests=None, delay_improvment=0):
+    def swap_requests(self, insertion_method, nb_attempts: int=5, requests=None, delay_improvment=0):
         """
         Operation used in both Santos 2013 and 2015 : permutation of two requests from different routes.
         1. If no input requests are provided as input, we try nb_attemps time to swap 2 random requests from the 10 most constrained requests.
@@ -377,7 +380,7 @@ class Solution:
         delays.sort(key=lambda delay: delay[1], reverse=True)
         return delays
 
-    def swap_points(self, nb_attempts: int=1):
+    def swap_points(self, nb_attempts: int=10):
         """
         Operation used only in Santos's 2013 paper.
         Permutation of two consecutive points of the same route.

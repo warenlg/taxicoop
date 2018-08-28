@@ -1,6 +1,9 @@
 import copy
 from typing import Callable, List
 
+from collections import defaultdict
+from haversine import haversine
+
 from utils import travel_time
 
 
@@ -112,29 +115,13 @@ class Taxi:
         assert delay >= 0
         return delay
 
-    def get_loading_timeline(self, route) -> List[int]:
-        """
-        Returns the loading timeline of the taxi through its travel.
-        """
-        served_request = []
-        loading_timeline = [0]
-        for x in route:
-            if x[1].id not in served_request:
-                loading_timeline.append(loading_timeline[-1] + 1)
-                served_request.append(x[1].id)
-            else:
-                loading_timeline.append(loading_timeline[-1] - 1)
-
-        assert len(loading_timeline) == len(route) + 1
-        assert loading_timeline[-1] == 0
-        return loading_timeline
-
-    def is_valid(self, route) -> bool:
+    def is_valid(self, route, alpha=0.8) -> bool:
         """
         Checks the validity of the route according to the following constraints :
             1. The capacity constraint
             2. No stops permitted in the taxi's route
-            3. The time windows of the passengers
+            3. The cost constraint
+            4. The time windows of the passengers
         """
         served_request = []
         loading_timeline = [0]
@@ -155,7 +142,30 @@ class Taxi:
         assert len(loading_timeline) == len(route) + 1
         assert loading_timeline[-1] == 0
 
-        # The time windows of the passengers
+        # 3. The cost constraint
+        travel_costs = defaultdict(int)
+        coordinates = defaultdict(list)
+        on_board = []
+        for i, point in enumerate(route[:-1]):
+            cost = haversine(route[i][2], route[i+1][2])
+            if point[1].id not in on_board:
+                on_board.append(point[1].id)
+                coordinates[point[1].id].append(point[2])
+            else:
+                on_board.remove(point[1].id)
+                coordinates[point[1].id].append(point[2])
+            for r_id in on_board:
+                travel_costs[r_id] += cost / len(on_board)
+        coordinates[route[-1][1].id].append(route[-1][2])
+        
+        assert len(on_board) == 1
+        assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(route) / 2))]
+
+        for r_id, cost in travel_costs.items():
+            if cost > haversine(coordinates[r_id][0], coordinates[r_id][1]) * alpha:
+                return False
+
+        # 4. The time windows of the passengers
         served_requests = []
         for i in range(len(route) - 1):
             # updates the delivery datetimes of the route after the insertions
