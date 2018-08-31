@@ -194,6 +194,29 @@ def main():
         print()
         print("Elite obj :", elite_obj)
 
+    print()
+    print("---------------------------------------------------------")
+    print("                     Final stats                         ")
+    print("---------------------------------------------------------")
+    print()
+
+    elite_solution.check_no_requests_served_twice()
+    all_individual_delays = elite_solution.all_individual_delays
+    time_elapsed = time.clock() - time_start
+    print("Number of requests :", nb_requests)
+    print("Number of GRASP iterations :", GRASP_iteration)
+    print("Best obj :", elite_obj)
+    print("Percentage of pooling : %0.1f %%" % (elite_obj*100 / nb_requests))
+
+    print()
+    print("Average delay for the customers accepting the pooling : %0.2f" % (mean(all_individual_delays)))
+    print("Maximum delay : %0.2f" % (max(all_individual_delays)))
+    print("Minimum delay : %0.2f" % (min(all_individual_delays)))
+
+    print()
+    print("Computation time : %0.2f sec" % (round(time_elapsed, 2)))
+    print("Average computation time by iteration : %0.2f sec" % (round(time_elapsed, 2) / GRASP_iteration))
+
 
 if __name__ == "__main__":
     sys.exit(main())
