@@ -115,7 +115,7 @@ class Solution:
                 pending_requests.add(taxi.route[0][1].id)
         return pending_requests
 
-    def local_search(self, insertion_method, max_iter: int=10, nb_swap: int=3):
+    def local_search(self, insertion_method, max_iter: int=10, nb_swap: int=10):
         """
         Algorithm that performs the local search of the GRASP heuristic.
         At each iteration :
@@ -128,7 +128,9 @@ class Solution:
         current_obj = current_solution.compute_obj
         for i in range(max_iter):
             print("  -- it ", i)
+            current_solution.check_no_requests_served_twice()
             next_solution = current_solution.insert_requests(current_solution.pending_requests, insertion_method)
+            next_solution.check_no_requests_served_twice()
             next_obj = next_solution.compute_obj
             if next_obj > current_obj:
                 current_solution = copy.deepcopy(next_solution)
@@ -140,6 +142,7 @@ class Solution:
                 for s in range(nb_swap):
                     #print("     swap it :", s)
                     current_solution = current_solution.swap_requests(insertion_method)
+                    current_solution.check_no_requests_served_twice()
         return current_solution, current_obj
 
     def path_relinking(self, initial_solution, insertion_method):
@@ -169,12 +172,16 @@ class Solution:
             for req_id in requests_to_merge:
                 initial_pending_requests.remove(req_id)
             initial_solution = initial_solution.merge_pending_requests(requests_to_merge, other_requests, insertion_method)
+        initial_solution.check_no_requests_served_twice()
         print("     1. obj :", initial_solution.compute_obj)
 
         initial_solution, initial_pending_requests = initial_solution.insert_requests(initial_pending_requests, insertion_method, other_requests)
+        initial_solution.check_no_requests_served_twice()
         print("     2. obj :", initial_solution.compute_obj)
         initial_solution = initial_solution.guided_swap(other_requests.values())
+        initial_solution.check_no_requests_served_twice()
         initial_solution, initial_pending_requests = initial_solution.insert_requests(initial_pending_requests, insertion_method, other_requests)
+        initial_solution.check_no_requests_served_twice()
         print("     3. obj :", initial_solution.compute_obj)
         
         return initial_solution, initial_solution.compute_obj
@@ -221,41 +228,50 @@ class Solution:
         """
         if other_requests is not None:
             requests_inserted = []
+            requests_already_inserted = []
             potential_routes = self.get_potential_routes(other_requests)
             for req_id in requests:
-                for taxi in potential_routes[req_id]:
-                    try:
-                        taxi.insert(self.requests[req_id], method=insertion_method)
-                        self.remove_pending_request(req_id)
-                        improvment = True
-                        requests_inserted.append(req_id)
-                    except Exception:
-                        continue
+                if req_id not in requests_already_inserted:
+                    for taxi in potential_routes[req_id]:
+                        try:
+                            adjacent_request = taxi.route[0][1].id
+                            taxi.insert(self.requests[req_id], method=insertion_method)
+                            self.remove_pending_request(req_id)
+                            requests_inserted.append(req_id)
+                            if adjacent_request in requests:
+                                requests_already_inserted.append(adjacent_request)
+                        except Exception:
+                            continue
             for req_id in requests_inserted:
                 requests.remove(req_id)
             return self, requests
 
         else:
+            requests_already_inserted = []
             for req_id in requests:
-                request = self.requests[req_id]
-                for j in range(nb_attempts):
-                    taxi = random.sample(self.taxis, 1)[0]
-                    if req_id != taxi.route[0][1].id:
-                        try:
-                            taxi.insert(request, method=insertion_method)
-                            self.remove_pending_request(req_id)
-                            break
-                        except Exception:
-                            continue
+                if req_id not in requests_already_inserted:
+                    request = self.requests[req_id]
+                    for j in range(nb_attempts):
+                        taxi = random.sample(self.taxis, 1)[0]
+                        if req_id != taxi.route[0][1].id:
+                            try:
+                                adjacent_request = taxi.route[0][1].id
+                                taxi.insert(request, method=insertion_method)
+                                self.remove_pending_request(req_id)
+                                if adjacent_request in requests:
+                                    requests_already_inserted.append(adjacent_request)
+                                break
+                            except Exception:
+                                continue
             return self
 
-    def remove_pending_request(self, req_id):
+    def remove_pending_request(self, r_id):
         """
         Removes pending requests (requests served in an individual route) from a solution,
         usually because those requests have just been assigned to existing routes of the solution.
         """
         nb_taxis = len(self.taxis)
-        self.taxis = [taxi for taxi in self.taxis if not (len(taxi.route) == 2 and taxi.route[0][1].id == req_id)]
+        self.taxis = [taxi for taxi in self.taxis if not (len(taxi.route) == 2 and taxi.route[0][1].id == r_id)]
         assert len(self.taxis) == nb_taxis - 1
 
     def guided_swap(self, requests: List):
@@ -380,6 +396,16 @@ class Solution:
         delays.sort(key=lambda delay: delay[1], reverse=True)
         return delays
 
+    @property
+    def all_individual_delays(self):
+        all_individual_delays = []
+        for i, taxi in enumerate(self.taxis):
+            if len(taxi.route) > 2:
+                for r_id, delay in taxi.individual_delays.items():
+                    all_individual_delays.append(delay)
+        #assert len(all_individual_delays) == self.nb_requests
+        return all_individual_delays
+
     def swap_points(self, nb_attempts: int=10):
         """
         Operation used only in Santos's 2013 paper.
@@ -402,4 +428,4 @@ class Solution:
         """
         served_requests = [p[1].id for taxi in self.taxis for p in taxi.route]
         if not len(served_requests) / 2 == len(set(served_requests)):
-            raise Exception("%d requests are served twice" % (len(served_requests) / 2 - len(set(served_requests))))
+            raise Exception("%d requests served twice" % (len(served_requests) / 2 - len(set(served_requests))))

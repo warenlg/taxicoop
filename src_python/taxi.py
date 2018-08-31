@@ -115,6 +115,31 @@ class Taxi:
         assert delay >= 0
         return delay
 
+    @property
+    def individual_delays(self):
+        on_board = []
+        individual_delays = defaultdict(int)
+        coordinates = defaultdict(list)
+        for i, point in enumerate(self.route[:-1]):
+            time = travel_time(self.route[i][2], self.route[i+1][2])
+            if point[1].id not in on_board:
+                on_board.append(point[1].id)
+                coordinates[point[1].id].append(point[2])
+            else:
+                on_board.remove(point[1].id)
+                coordinates[point[1].id].append(point[2])
+            for r_id in on_board:
+                individual_delays[r_id] += time
+        coordinates[self.route[-1][1].id].append(self.route[-1][2])
+
+        assert len(on_board) == 1
+        assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(self.route) / 2))]
+
+        for r_id in individual_delays.keys():
+            individual_delays[r_id] -= travel_time(coordinates[r_id][0], coordinates[r_id][1])
+            assert individual_delays[r_id] >= 0
+        return individual_delays
+
     def is_valid(self, route, alpha=0.8) -> bool:
         """
         Checks the validity of the route according to the following constraints :

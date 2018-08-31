@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Callable, Dict, List, Tuple
 
+from statistics import mean
 from matplotlib import pyplot as plt
 
 from request import Request
@@ -19,6 +20,10 @@ def setup():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-i", "--input", type=str,
                         help="Path to the dataset of taxi requests.")
+    parser.add_argument("-o", "--output", type=str,
+                        help="Path to the output best solution.")
+    parser.add_argument("--max-time", type=int, default=30,
+                        help="Maximum time allowed for the algorithm to return a solution.")
     parser.add_argument("--checkpoint-dataset", type=str, required=True,
                         help="Path to the dataset of taxi requests.")
     parser.add_argument("-s", "--size", type=int, default=None,
@@ -138,32 +143,37 @@ def main():
     args = setup()
     if args.data_saved:
         with open(args.checkpoint_dataset, "rb") as f:
-            requests = pickle.load(f)
+            requests = pickle.load(f)[:args.test_size]
     else:
         dataset = read_dataset(args.input, args.size, args.time_window)
-        requests = initialize_requests(dataset, timeframe=args.timeframe)
+        requests = initialize_requests(dataset, timeframe=args.timeframe)[:args.test_size]
         with open(args.checkpoint_dataset, "wb") as f:
             pickle.dump(requests, f)
+    nb_requests = len(requests)
 
     print("Starting GRASP iterations...")
     time_start = time.clock()
     elite_solution = None
-    for i in range(args.num_GRASP):
+    GRASP_iteration = 0
+    while time.clock() - time_start < args.max_time:
+        GRASP_iteration += 1
         print()
-        print("----- Iteration %d -----" % (i+1))
-        init_solution = Solution(requests[:args.test_size])
+        print("----- Iteration %d ----- : %0.2f" % (GRASP_iteration, time.clock() - time_start))
+        init_solution = Solution(requests)
         init_solution.build_initial_solution(args.insertion_method, beta=args.beta)
+        init_solution.check_no_requests_served_twice()
 
         init_obj = init_solution.compute_obj
         print("Obj init :", init_obj)
-        if init_obj == init_solution.nb_requests:
+        if init_obj == nb_requests:
             elite_solution = copy.deepcopy(init_solution)
             elite_obj = init_obj
             break
 
         print("1. Local Search :", init_obj)
         ls_solution, ls_obj = init_solution.local_search(args.insertion_method, args.num_local_search)
-        if ls_obj == ls_solution.nb_requests:
+        ls_solution.check_no_requests_served_twice()
+        if ls_obj == nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
             break
@@ -171,8 +181,10 @@ def main():
         if elite_solution:
             print("2. Path Relinking :", ls_obj)
             pr_solution, pr_obj = ls_solution.path_relinking(elite_solution, args.insertion_method)
+            pr_solution.check_no_requests_served_twice()
             print("3. Second Local Search :", pr_obj)
             ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.insertion_method, args.num_local_search)
+            ls_pr_solution.check_no_requests_served_twice()
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
                 elite_obj = ls_pr_obj
@@ -181,11 +193,6 @@ def main():
             elite_obj = ls_obj
         print()
         print("Elite obj :", elite_obj)
-
-    print("Best obj after %d iterations of the GRASP heuristic : %d" % (args.num_GRASP, elite_obj))
-
-    time_elapsed = (time.clock() - time_start)
-    print("Computation time :", round(time_elapsed, 2))
 
 
 if __name__ == "__main__":
