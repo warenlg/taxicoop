@@ -69,11 +69,11 @@ class Taxi:
             except UnboundLocalError:
                 raise Exception("could not insert request %d into the route %s" % (request.id, self.route))
 
-    def remove(self, request: int):
+    def remove(self, request_id: int):
         """
         Removes the input request from the route.
         """
-        self.route = [req for req in self.route if req[1].id != request]
+        self.route = [req for req in self.route if req[1].id != request_id]
 
     def swap(self, pos1: int, pos2: int):
         """
@@ -116,12 +116,14 @@ class Taxi:
         return delay
 
     @property
-    def individual_delays(self):
+    def individual_stats(self):
         on_board = []
         individual_delays = defaultdict(int)
+        individual_economies = defaultdict(int)
         coordinates = defaultdict(list)
         for i, point in enumerate(self.route[:-1]):
             time = travel_time(self.route[i][2], self.route[i+1][2])
+            cost = haversine(self.route[i][2], self.route[i+1][2])
             if point[1].id not in on_board:
                 on_board.append(point[1].id)
                 coordinates[point[1].id].append(point[2])
@@ -130,15 +132,25 @@ class Taxi:
                 coordinates[point[1].id].append(point[2])
             for r_id in on_board:
                 individual_delays[r_id] += time
+                individual_economies[r_id] += cost / len(on_board)
         coordinates[self.route[-1][1].id].append(self.route[-1][2])
 
+        assert len (individual_delays) == len(individual_economies)
         assert len(on_board) == 1
         assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(self.route) / 2))]
 
         for r_id in individual_delays.keys():
-            individual_delays[r_id] -= travel_time(coordinates[r_id][0], coordinates[r_id][1])
+            time = travel_time(coordinates[r_id][0], coordinates[r_id][1])
+            cost = haversine(coordinates[r_id][0], coordinates[r_id][1])
+            
+            individual_delays[r_id] -= time
             assert individual_delays[r_id] >= 0
-        return individual_delays
+            individual_delays[r_id] = individual_delays[r_id]*100 / time
+
+            individual_economies[r_id] -= cost
+            assert individual_economies[r_id] <= 0
+            individual_economies[r_id] = abs(individual_economies[r_id])*100 / cost
+        return individual_delays, individual_economies
 
     def is_valid(self, route, alpha=0.8) -> bool:
         """

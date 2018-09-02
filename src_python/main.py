@@ -161,7 +161,7 @@ def main():
         print("----- Iteration %d ----- : %0.2f" % (GRASP_iteration, time.clock() - time_start))
         init_solution = Solution(requests)
         init_solution.build_initial_solution(args.insertion_method, beta=args.beta)
-        init_solution.check_no_requests_served_twice()
+        init_solution.check_valid_solution()
 
         init_obj = init_solution.compute_obj
         print("Obj init :", init_obj)
@@ -172,7 +172,7 @@ def main():
 
         print("1. Local Search :", init_obj)
         ls_solution, ls_obj = init_solution.local_search(args.insertion_method, args.num_local_search)
-        ls_solution.check_no_requests_served_twice()
+        ls_solution.check_valid_solution()
         if ls_obj == nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
@@ -181,10 +181,10 @@ def main():
         if elite_solution:
             print("2. Path Relinking :", ls_obj)
             pr_solution, pr_obj = ls_solution.path_relinking(elite_solution, args.insertion_method)
-            pr_solution.check_no_requests_served_twice()
+            pr_solution.check_valid_solution()
             print("3. Second Local Search :", pr_obj)
             ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.insertion_method, args.num_local_search)
-            ls_pr_solution.check_no_requests_served_twice()
+            ls_pr_solution.check_valid_solution()
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
                 elite_obj = ls_pr_obj
@@ -200,8 +200,8 @@ def main():
     print("---------------------------------------------------------")
     print()
 
-    elite_solution.check_no_requests_served_twice()
-    all_individual_delays = elite_solution.all_individual_delays
+    elite_solution.check_valid_solution()
+    all_individual_delays, all_individual_economies = elite_solution.all_individual_stats
     time_elapsed = time.clock() - time_start
     print("Number of requests :", nb_requests)
     print("Number of GRASP iterations :", GRASP_iteration)
@@ -209,9 +209,14 @@ def main():
     print("Percentage of pooling : %0.1f %%" % (elite_obj*100 / nb_requests))
 
     print()
-    print("Average delay for the customers accepting the pooling : %0.2f" % (mean(all_individual_delays)))
-    print("Maximum delay : %0.2f" % (max(all_individual_delays)))
-    print("Minimum delay : %0.2f" % (min(all_individual_delays)))
+    print("Average delay for the customers accepting the pooling : +%0.1f %%" % (mean(all_individual_delays)))
+    print("Maximum delay : +%0.1f %%" % (max(all_individual_delays)))
+    print("Minimum delay : +%0.1f %%" % (min(all_individual_delays)))
+
+    print()
+    print("Average economie for the customers accepting the pooling : -%0.1f %%" % (mean(all_individual_economies)))
+    print("Maximum economie : -%d %%" % (max(all_individual_economies)))
+    print("Minimum economie : -%d %%" % (min(all_individual_economies)))
 
     print()
     print("Computation time : %0.2f sec" % (round(time_elapsed, 2)))
