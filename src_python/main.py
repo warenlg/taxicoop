@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Callable, Dict, List, Tuple
 
-from statistics import mean
+from statistics import mean, stdev
 from matplotlib import pyplot as plt
 
 from request import Request
@@ -38,10 +38,12 @@ def setup():
                         help="Constant speed for the taxis: 40km/h in Santos's paper.")
     parser.add_argument("-c", "--capacity", type=int, default=2,
                         help="Seat capacity of each taxi, driver not included.")
-    parser.add_argument("--alpha", type=float, default=1,
+    parser.add_argument("--alpha", type=float, default=0.8,
                         help="Customer are paying less than an individual ride times alpha.")
-    parser.add_argument("--beta", type=float, default=0.5,
+    parser.add_argument("--beta", type=float, default=0.1,
                         help="Size of the Restricted Candidate List (RCL) in the insertion method.")
+    parser.add_argument("--limit-rcl", type=float, default=0.2,
+                        help="Limit number of the RCL candidates when building the initial greedy solution.")
     parser.add_argument("--num-GRASP", type=int, default=10,
                         help="Maximum number of iterations of the GRASP heuristic.")
     parser.add_argument("--num-local-search", type=int, default=10,
@@ -159,8 +161,11 @@ def main():
         GRASP_iteration += 1
         print()
         print("----- Iteration %d ----- : %0.2f" % (GRASP_iteration, time.clock() - time_start))
-        init_solution = Solution(requests)
-        init_solution.build_initial_solution(args.insertion_method, beta=args.beta)
+        init_solution = Solution(requests=requests)
+        init_solution.build_initial_solution(insertion_method=args.insertion_method,
+                                             alpha=args.alpha,
+                                             beta=args.beta,
+                                             limit_RCL=args.limit_rcl)
         init_solution.check_valid_solution()
 
         init_obj = init_solution.compute_obj
@@ -171,7 +176,9 @@ def main():
             break
 
         print("1. Local Search :", init_obj)
-        ls_solution, ls_obj = init_solution.local_search(args.insertion_method, args.num_local_search)
+        ls_solution, ls_obj = init_solution.local_search(insertion_method=args.insertion_method,
+                                                         alpha=args.alpha,
+                                                         max_iter=args.num_local_search)
         ls_solution.check_valid_solution()
         if ls_obj == nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
@@ -180,10 +187,14 @@ def main():
         
         if elite_solution:
             print("2. Path Relinking :", ls_obj)
-            pr_solution, pr_obj = ls_solution.path_relinking(elite_solution, args.insertion_method)
+            pr_solution, pr_obj = ls_solution.path_relinking(initial_solution=elite_solution,
+                                                             insertion_method=args.insertion_method,
+                                                             alpha=args.alpha)
             pr_solution.check_valid_solution()
             print("3. Second Local Search :", pr_obj)
-            ls_pr_solution, ls_pr_obj = pr_solution.local_search(args.insertion_method, args.num_local_search)
+            ls_pr_solution, ls_pr_obj = pr_solution.local_search(insertion_method=args.insertion_method,
+                                                                 alpha=args.alpha,
+                                                                 max_iter=args.num_local_search)
             ls_pr_solution.check_valid_solution()
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
@@ -201,7 +212,7 @@ def main():
     print()
 
     elite_solution.check_valid_solution()
-    all_individual_delays, all_individual_economies = elite_solution.all_individual_stats
+    all_individual_delays, all_individual_delays_per, all_individual_economies_per = elite_solution.all_individual_stats
     time_elapsed = time.clock() - time_start
     print("Number of requests :", nb_requests)
     print("Number of GRASP iterations :", GRASP_iteration)
@@ -209,14 +220,15 @@ def main():
     print("Percentage of pooling : %0.1f %%" % (elite_obj*100 / nb_requests))
 
     print()
-    print("Average delay for the customers accepting the pooling : +%0.1f %%" % (mean(all_individual_delays)))
-    print("Maximum delay : +%0.1f %%" % (max(all_individual_delays)))
-    print("Minimum delay : +%0.1f %%" % (min(all_individual_delays)))
+    print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)" % (mean(all_individual_delays), mean(all_individual_delays_per)))
+    print("Standard Deviation of the delay : %0.1f sec" % (stdev(all_individual_delays)))
+    print("Maximum delay : %0.1f sec (+%0.1f %%)" % (max(all_individual_delays), max(all_individual_delays_per)))
+    print("Minimum delay : %0.1f sec (+%0.1f %%)" % (min(all_individual_delays), min(all_individual_delays_per)))
 
     print()
-    print("Average economie for the customers accepting the pooling : -%0.1f %%" % (mean(all_individual_economies)))
-    print("Maximum economie : -%d %%" % (max(all_individual_economies)))
-    print("Minimum economie : -%d %%" % (min(all_individual_economies)))
+    print("Average price saving for the customers accepting the pooling : -%0.1f %%" % (mean(all_individual_economies_per)))
+    print("Maximum price saving : -%0.1f %%" % (max(all_individual_economies_per)))
+    print("Minimum price saving : -%0.1f %%" % (min(all_individual_economies_per)))
 
     print()
     print("Computation time : %0.2f sec" % (round(time_elapsed, 2)))

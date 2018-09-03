@@ -27,7 +27,7 @@ class Taxi:
         self.capacity = capacity
         self.speed = speed
 
-    def insert(self, request: Callable, method: str):
+    def insert(self, request: Callable, alpha: float, method: str):
         """
         Insertion methods describe in Santos 2015.
         IA stands for the exhaustive  method.
@@ -44,7 +44,7 @@ class Taxi:
                     route2 = copy.deepcopy(route1)
                     route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
                                   request, request.DO_coordinates])
-                    valid = self.is_valid(route2)
+                    valid = self.is_valid(route=route2, alpha=alpha)
                     if valid:
                         self.route = route2
                         return
@@ -59,9 +59,9 @@ class Taxi:
                     route2 = copy.deepcopy(route1)
                     route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
                                   request, request.DO_coordinates])
-                    valid = self.is_valid(route2)
-                    if valid and self.delay(route2) < cur_delay:
-                        cur_delay = self.delay(route2)
+                    valid = self.is_valid(route=route2, alpha=alpha)
+                    if valid and self.delay(route=route2) < cur_delay:
+                        cur_delay = self.delay(route=route2)
                         route3 = route2
             try:
                 self.route = route3
@@ -75,8 +75,9 @@ class Taxi:
         """
         self.route = [req for req in self.route if req[1].id != request_id]
 
-    def swap(self, pos1: int, pos2: int):
+    def swap(self, pos1: int, pos2: int, alpha: float):
         """
+        Function currently not used.
         Function to swap points in pos1 and pos2 in the route if valid.
         """
         route = copy.deepcopy(self.route)
@@ -93,9 +94,9 @@ class Taxi:
             served_requests.append(route[i][1].id)
 
         try:  
-            self.is_valid(route)
+            self.is_valid(route=route, alpha=alpha)
             self.update_delivery_datetimes(route)
-            self.is_valid(route)
+            self.is_valid(route=route, alpha=alpha)
             self.route = route
         except Exception:
             raise Exception("could not swap point %d and point %d in route %s" % (pos1, pos2, self.route))
@@ -119,7 +120,7 @@ class Taxi:
     def individual_stats(self):
         on_board = []
         individual_delays = defaultdict(int)
-        individual_economies = defaultdict(int)
+        individual_economies_per = defaultdict(int)
         coordinates = defaultdict(list)
         for i, point in enumerate(self.route[:-1]):
             time = travel_time(self.route[i][2], self.route[i+1][2])
@@ -132,27 +133,29 @@ class Taxi:
                 coordinates[point[1].id].append(point[2])
             for r_id in on_board:
                 individual_delays[r_id] += time
-                individual_economies[r_id] += cost / len(on_board)
+                individual_economies_per[r_id] += cost / len(on_board)
         coordinates[self.route[-1][1].id].append(self.route[-1][2])
 
-        assert len (individual_delays) == len(individual_economies)
+        assert len (individual_delays) == len(individual_economies_per)
         assert len(on_board) == 1
         assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(self.route) / 2))]
 
+        individual_delays_per = copy.deepcopy(individual_delays)
         for r_id in individual_delays.keys():
             time = travel_time(coordinates[r_id][0], coordinates[r_id][1])
             cost = haversine(coordinates[r_id][0], coordinates[r_id][1])
             
             individual_delays[r_id] -= time
+            individual_delays_per[r_id] -= time
             assert individual_delays[r_id] >= 0
-            individual_delays[r_id] = individual_delays[r_id]*100 / time
+            individual_delays_per[r_id] = individual_delays_per[r_id]*100 / time
 
-            individual_economies[r_id] -= cost
-            assert individual_economies[r_id] <= 0
-            individual_economies[r_id] = abs(individual_economies[r_id])*100 / cost
-        return individual_delays, individual_economies
+            individual_economies_per[r_id] -= cost
+            assert individual_economies_per[r_id] <= 0
+            individual_economies_per[r_id] = abs(individual_economies_per[r_id])*100 / cost
+        return individual_delays, individual_delays_per, individual_economies_per
 
-    def is_valid(self, route, alpha=0.8) -> bool:
+    def is_valid(self, route, alpha: float) -> bool:
         """
         Checks the validity of the route according to the following constraints :
             1. The capacity constraint
@@ -160,6 +163,8 @@ class Taxi:
             3. The cost constraint
             4. The time windows of the passengers
         """
+        #print()
+        #print("route :", [p[1].id for p in route])
         served_request = []
         loading_timeline = [0]
         for i, x in enumerate(route):
@@ -221,5 +226,4 @@ class Taxi:
         # last point of the route
         if route[-1][0] > route[-1][1].DO_datetime[1]:
             return False
-        #print("True")
         return True
