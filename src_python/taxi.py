@@ -1,5 +1,5 @@
 import copy
-from typing import Callable, List
+from typing import Callable
 
 from collections import defaultdict
 from haversine import haversine
@@ -8,8 +8,9 @@ from utils import travel_time
 
 
 # types of insertion methods
-IA = "IA" # exhaustive method
-IB = "IB" # heuristic method
+IA = "IA"  # exhaustive method
+IB = "IB"  # heuristic method
+
 
 class Taxi:
 

@@ -5,15 +5,13 @@ import logging
 import pickle
 import sys
 import time
-from typing import Callable, Dict, List, Tuple
+from typing import List, Tuple
 
 from statistics import mean, stdev
-from matplotlib import pyplot as plt
 
 from request import Request
 from solution import Solution
-from taxi import Taxi
-from utils import request2coordinates, travel_time
+from utils import travel_time
 
 
 def setup():
@@ -50,8 +48,15 @@ def setup():
                         help="Maximum number of iterations in the local search.")
     parser.add_argument("--insertion-method", type=str, default="IA", choices=("IA", "IB"),
                         help="Type of insertion method to use."
-                              "IA stands for the exhaustive method."
-                              "IB stands for the heuristic method.")
+                             "IA stands for the exhaustive method."
+                             "IB stands for the heuristic method.")
+    parser.add_argument("--nb-attempts-insert", type=int, default=5,
+                        help="Number of times we try to insert a request in the insert_requests() method.")
+    parser.add_argument("--nb-swap", type=int, default=3,
+                        help="Number of swap operations to perform in the local search"
+                        "when no improvment has been found in the previous iteration.")
+    parser.add_argument("--nb-attempts-swap", type=int, default=5,
+                        help="Number of times we try to swap 2 requests before reaching 2 valid output routes.")
     parser.add_argument("--test-size", type=int, default=200,
                         help="Number of requests to consider to test the algorithm.")
     logging.basicConfig(level=logging.INFO)
@@ -111,7 +116,7 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List[List[Tu
             request.append((DO_datetime, DO_datetime + time_window*60))
             request.append(PU_coordinates)
             request.append(DO_coordinates)
-            
+
             # filtering
             if PU_coordinates[0] != 0 and DO_coordinates[0] != 0 and DO_datetime - PU_datetime < 12*3600:
                 dataset.append(request)
@@ -178,23 +183,31 @@ def main():
         print("1. Local Search :", init_obj)
         ls_solution, ls_obj = init_solution.local_search(insertion_method=args.insertion_method,
                                                          alpha=args.alpha,
-                                                         max_iter=args.num_local_search)
+                                                         max_iter=args.num_local_search,
+                                                         nb_attempts_insert=args.nb_attempts_insert,
+                                                         nb_swap=args.nb_swap,
+                                                         nb_attempts_swap=args.nb_attempts_swap)
         ls_solution.check_valid_solution()
         if ls_obj == nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
             break
-        
+
         if elite_solution:
             print("2. Path Relinking :", ls_obj)
             pr_solution, pr_obj = ls_solution.path_relinking(initial_solution=elite_solution,
                                                              insertion_method=args.insertion_method,
-                                                             alpha=args.alpha)
+                                                             alpha=args.alpha,
+                                                             nb_attempts_insert=args.nb_attempts_insert,
+                                                             nb_attempts_swap=args.nb_attempts_swap)
             pr_solution.check_valid_solution()
             print("3. Second Local Search :", pr_obj)
             ls_pr_solution, ls_pr_obj = pr_solution.local_search(insertion_method=args.insertion_method,
                                                                  alpha=args.alpha,
-                                                                 max_iter=args.num_local_search)
+                                                                 max_iter=args.num_local_search,
+                                                                 nb_attempts_insert=args.nb_attempts_insert,
+                                                                 nb_swap=args.nb_swap,
+                                                                 nb_attempts_swap=args.nb_attempts_swap)
             ls_pr_solution.check_valid_solution()
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
@@ -220,13 +233,15 @@ def main():
     print("Percentage of pooling : %0.1f %%" % (elite_obj*100 / nb_requests))
 
     print()
-    print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)" % (mean(all_individual_delays), mean(all_individual_delays_per)))
+    print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)"
+          % (mean(all_individual_delays), mean(all_individual_delays_per)))
     print("Standard Deviation of the delay : %0.1f sec" % (stdev(all_individual_delays)))
     print("Maximum delay : %0.1f sec (+%0.1f %%)" % (max(all_individual_delays), max(all_individual_delays_per)))
     print("Minimum delay : %0.1f sec (+%0.1f %%)" % (min(all_individual_delays), min(all_individual_delays_per)))
 
     print()
-    print("Average price saving for the customers accepting the pooling : -%0.1f %%" % (mean(all_individual_economies_per)))
+    print("Average price saving for the customers accepting the pooling : -%0.1f %%"
+          % (mean(all_individual_economies_per)))
     print("Maximum price saving : -%0.1f %%" % (max(all_individual_economies_per)))
     print("Minimum price saving : -%0.1f %%" % (min(all_individual_economies_per)))
 
