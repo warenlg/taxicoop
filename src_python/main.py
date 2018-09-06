@@ -52,11 +52,9 @@ def setup():
                              "IB stands for the heuristic method.")
     parser.add_argument("--nb-attempts-insert", type=int, default=5,
                         help="Number of times we try to insert a request in the insert_requests() method.")
-    parser.add_argument("--nb-swap", type=int, default=3,
-                        help="Number of swap operations to perform in the local search"
+    parser.add_argument("--nb-swap", type=float, default=0.1,
+                        help="Proportion of swap operations to perform in the local search among all requests"
                         "when no improvment has been found in the previous iteration.")
-    parser.add_argument("--nb-attempts-swap", type=int, default=5,
-                        help="Number of times we try to swap 2 requests before reaching 2 valid output routes.")
     parser.add_argument("--test-size", type=int, default=200,
                         help="Number of requests to consider to test the algorithm.")
     logging.basicConfig(level=logging.INFO)
@@ -171,7 +169,6 @@ def main():
                                              alpha=args.alpha,
                                              beta=args.beta,
                                              limit_RCL=args.limit_rcl)
-        init_solution.check_valid_solution()
 
         init_obj = init_solution.compute_obj
         print("Obj init :", init_obj)
@@ -185,9 +182,7 @@ def main():
                                                          alpha=args.alpha,
                                                          max_iter=args.num_local_search,
                                                          nb_attempts_insert=args.nb_attempts_insert,
-                                                         nb_swap=args.nb_swap,
-                                                         nb_attempts_swap=args.nb_attempts_swap)
-        ls_solution.check_valid_solution()
+                                                         nb_swap=args.nb_swap)
         if ls_obj == nb_requests:
             elite_solution = copy.deepcopy(ls_solution)
             elite_obj = ls_obj
@@ -198,17 +193,13 @@ def main():
             pr_solution, pr_obj = ls_solution.path_relinking(initial_solution=elite_solution,
                                                              insertion_method=args.insertion_method,
                                                              alpha=args.alpha,
-                                                             nb_attempts_insert=args.nb_attempts_insert,
-                                                             nb_attempts_swap=args.nb_attempts_swap)
-            pr_solution.check_valid_solution()
+                                                             nb_attempts_insert=args.nb_attempts_insert)
             print("3. Second Local Search :", pr_obj)
             ls_pr_solution, ls_pr_obj = pr_solution.local_search(insertion_method=args.insertion_method,
                                                                  alpha=args.alpha,
                                                                  max_iter=args.num_local_search,
                                                                  nb_attempts_insert=args.nb_attempts_insert,
-                                                                 nb_swap=args.nb_swap,
-                                                                 nb_attempts_swap=args.nb_attempts_swap)
-            ls_pr_solution.check_valid_solution()
+                                                                 nb_swap=args.nb_swap)
             if ls_pr_obj > elite_obj:
                 elite_solution = copy.deepcopy(ls_pr_solution)
                 elite_obj = ls_pr_obj
@@ -220,11 +211,18 @@ def main():
 
     print()
     print("---------------------------------------------------------")
+    print("            Tests on the final best solution                        ")
+    print("---------------------------------------------------------")
+    print()
+
+    print("Final solution is valid :", elite_solution.check_valid_solution())
+
+    print()
+    print("---------------------------------------------------------")
     print("                     Final stats                         ")
     print("---------------------------------------------------------")
     print()
 
-    elite_solution.check_valid_solution()
     all_individual_delays, all_individual_delays_per, all_individual_economies_per = elite_solution.all_individual_stats
     time_elapsed = time.clock() - time_start
     print("Number of requests :", nb_requests)

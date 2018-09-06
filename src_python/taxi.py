@@ -16,7 +16,8 @@ class Taxi:
 
     def __init__(self, request, capacity: int=2, speed: int=40):
         """
-        list of points and corresponding requests in the route of a Taxi in the same order as the taxi travels through them.
+        list of points and corresponding requests in the route of a Taxi
+            in the same order as the taxi travels through them.
         Each point in self.route is reprensented by (time, request, coordinates).
         Example of self.route 2 requests served :
         [(B3_source, request_3, PU_coordinates_3), (B6_source, request_6, PU_coordinates_6),
@@ -36,14 +37,15 @@ class Taxi:
         """
         if any(r[1].id == request.id for r in self.route):
             raise Exception("Impossible to insert a request in a route where it is already there")
-        
+
         if method is IA:
             for pu in range(len(self.route) + 1):
                 route1 = copy.deepcopy(self.route)
                 route1.insert(pu, [request.PU_datetime[0], request, request.PU_coordinates])
                 for do in range(pu + 1, len(route1) + 1):
                     route2 = copy.deepcopy(route1)
-                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
+                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates,
+                                                                            request.DO_coordinates),
                                   request, request.DO_coordinates])
                     valid = self.is_valid(route=route2, alpha=alpha)
                     if valid:
@@ -58,7 +60,8 @@ class Taxi:
                 route1.insert(pu, [request.PU_datetime[0], request, request.PU_coordinates])
                 for do in range(pu + 1, len(route1) + 1):
                     route2 = copy.deepcopy(route1)
-                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates),
+                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates,
+                                                                            request.DO_coordinates),
                                   request, request.DO_coordinates])
                     valid = self.is_valid(route=route2, alpha=alpha)
                     if valid and self.delay(route=route2) < cur_delay:
@@ -88,20 +91,20 @@ class Taxi:
             # source point
             if route[i][1].id not in served_requests:
                 route[i][0] = route[i][1].PU_datetime[0]
-            
+
             # destination point
             else:
                 route[i][0] = route[i][1].DO_datetime[0]
             served_requests.append(route[i][1].id)
 
-        try:  
+        try:
             self.is_valid(route=route, alpha=alpha)
             self.update_delivery_datetimes(route)
             self.is_valid(route=route, alpha=alpha)
             self.route = route
         except Exception:
             raise Exception("could not swap point %d and point %d in route %s" % (pos1, pos2, self.route))
-    
+
     def delay(self, route):
         """
         Returns the delay of the route.
@@ -111,8 +114,9 @@ class Taxi:
             if point[1].id not in request_delays:
                 request_delays[point[1].id] = point[0]
             else:
-                request_delays[point[1].id] = abs(request_delays[point[1].id] - point[0]) - travel_time(point[1].PU_coordinates, point[1].DO_coordinates)
-        assert len(request_delays) ==  len(route) / 2
+                request_delays[point[1].id] = abs(request_delays[point[1].id] - point[0])
+                - travel_time(point[1].PU_coordinates, point[1].DO_coordinates)
+        assert len(request_delays) == len(route) / 2
         delay = round(sum(request_delays.values()), 3)
         assert delay >= 0
         return delay
@@ -137,7 +141,7 @@ class Taxi:
                 individual_economies_per[r_id] += cost / len(on_board)
         coordinates[self.route[-1][1].id].append(self.route[-1][2])
 
-        assert len (individual_delays) == len(individual_economies_per)
+        assert len(individual_delays) == len(individual_economies_per)
         assert len(on_board) == 1
         assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(self.route) / 2))]
 
@@ -145,7 +149,7 @@ class Taxi:
         for r_id in individual_delays.keys():
             time = travel_time(coordinates[r_id][0], coordinates[r_id][1])
             cost = haversine(coordinates[r_id][0], coordinates[r_id][1])
-            
+
             individual_delays[r_id] -= time
             individual_delays_per[r_id] -= time
             assert individual_delays[r_id] >= 0
@@ -164,8 +168,6 @@ class Taxi:
             3. The cost constraint
             4. The time windows of the passengers
         """
-        #print()
-        #print("route :", [p[1].id for p in route])
         served_request = []
         loading_timeline = [0]
         for i, x in enumerate(route):
@@ -200,7 +202,7 @@ class Taxi:
             for r_id in on_board:
                 travel_costs[r_id] += cost / len(on_board)
         coordinates[route[-1][1].id].append(route[-1][2])
-        
+
         assert len(on_board) == 1
         assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(route) / 2))]
 
