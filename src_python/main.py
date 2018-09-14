@@ -3,9 +3,10 @@ import copy
 import csv
 import logging
 import pickle
+import signal
 import sys
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from statistics import mean, stdev
 
@@ -20,7 +21,7 @@ def setup():
                         help="Path to the dataset of taxi requests.")
     parser.add_argument("-o", "--output", type=str,
                         help="Path to the output best solution.")
-    parser.add_argument("--max-time", type=int, default=30,
+    parser.add_argument("--time-limit", type=int, default=30,
                         help="Maximum time allowed for the algorithm to return a solution.")
     parser.add_argument("--checkpoint-dataset", type=str, required=True,
                         help="Path to the dataset of taxi requests.")
@@ -40,7 +41,7 @@ def setup():
                         help="Customer are paying less than an individual ride times alpha.")
     parser.add_argument("--beta", type=float, default=0.1,
                         help="Size of the Restricted Candidate List (RCL) in the insertion method.")
-    parser.add_argument("--limit-rcl", type=float, default=0.2,
+    parser.add_argument("--limit-RCL", type=float, default=0.2,
                         help="Limit number of the RCL candidates when building the initial greedy solution.")
     parser.add_argument("--num-GRASP", type=int, default=10,
                         help="Maximum number of iterations of the GRASP heuristic.")
@@ -116,7 +117,10 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List[List[Tu
             request.append(DO_coordinates)
 
             # filtering
-            if PU_coordinates[0] != 0 and DO_coordinates[0] != 0 and DO_datetime - PU_datetime < 12*3600:
+            null_coordinates = PU_coordinates[0] == 0 and DO_coordinates[0] == 0
+            coordinates_too_far = DO_datetime - PU_datetime > 12*3600
+            same_DO_PU_coordinates = PU_coordinates == DO_coordinates
+            if not (null_coordinates and coordinates_too_far and same_DO_PU_coordinates):
                 dataset.append(request)
 
         # sort the requests by Pick-Up datetime
@@ -143,92 +147,100 @@ def initialize_requests(dataset, timeframe: int) -> List:
     log.info("Number of taxi requests : %d" % len(requests))
     return requests
 
-
-def main():
-    args = setup()
-    if args.data_saved:
-        with open(args.checkpoint_dataset, "rb") as f:
-            requests = pickle.load(f)[:args.test_size]
-    else:
-        dataset = read_dataset(args.input, args.size, args.time_window)
-        requests = initialize_requests(dataset, timeframe=args.timeframe)[:args.test_size]
-        with open(args.checkpoint_dataset, "wb") as f:
-            pickle.dump(requests, f)
+    
+def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_local_search, nb_attempts_insert, nb_swap):
     nb_requests = len(requests)
-
-    print("Starting GRASP iterations...")
-    time_start = time.clock()
     elite_solution = None
-    GRASP_iteration = 0
-    while time.clock() - time_start < args.max_time:
-        GRASP_iteration += 1
-        print()
-        print("----- Iteration %d ----- : %0.2f" % (GRASP_iteration, time.clock() - time_start))
-        init_solution = Solution(requests=requests)
-        init_solution.build_initial_solution(insertion_method=args.insertion_method,
-                                             alpha=args.alpha,
-                                             beta=args.beta,
-                                             limit_RCL=args.limit_rcl)
+    elite_obj = 0
+    GRASP_iterations = 0
+    time_start = time.clock()
+    try:
+        while nb_requests - elite_obj is not 0:
+            GRASP_iterations += 1
+            print()
+            print("----- Iteration %d ----- : %0.2f" % (GRASP_iterations, time.clock() - time_start))
+            solution = Solution(requests=requests)
+            solution.build_initial_solution(insertion_method=insertion_method,
+                                                 alpha=alpha,
+                                                 beta=beta,
+                                                 limit_RCL=limit_RCL)
 
-        init_obj = init_solution.compute_obj
-        print("Obj init :", init_obj)
-        if init_obj == nb_requests:
-            elite_solution = copy.deepcopy(init_solution)
-            elite_obj = init_obj
-            break
+            obj = solution.compute_obj
+            if obj == nb_requests:
+                elite_solution = copy.deepcopy(solution)
+                break
 
-        print("1. Local Search :", init_obj)
-        ls_solution, ls_obj = init_solution.local_search(insertion_method=args.insertion_method,
-                                                         alpha=args.alpha,
-                                                         max_iter=args.num_local_search,
-                                                         nb_attempts_insert=args.nb_attempts_insert,
-                                                         nb_swap=args.nb_swap)
-        if ls_obj == nb_requests:
-            elite_solution = copy.deepcopy(ls_solution)
-            elite_obj = ls_obj
-            break
+            print("1. Local Search :", obj)
+            solution.local_search(insertion_method=insertion_method,
+                                                             alpha=alpha,
+                                                             max_iter=num_local_search,
+                                                             nb_attempts_insert=nb_attempts_insert,
+                                                             nb_swap=nb_swap)
+            obj = solution.compute_obj
+            if obj == nb_requests:
+                elite_solution = copy.deepcopy(solution)
+                break
 
-        if elite_solution:
-            print("2. Path Relinking :", ls_obj)
-            pr_solution, pr_obj = ls_solution.path_relinking(initial_solution=elite_solution,
-                                                             insertion_method=args.insertion_method,
-                                                             alpha=args.alpha,
-                                                             nb_attempts_insert=args.nb_attempts_insert)
-            print("3. Second Local Search :", pr_obj)
-            ls_pr_solution, ls_pr_obj = pr_solution.local_search(insertion_method=args.insertion_method,
-                                                                 alpha=args.alpha,
-                                                                 max_iter=args.num_local_search,
-                                                                 nb_attempts_insert=args.nb_attempts_insert,
-                                                                 nb_swap=args.nb_swap)
-            if ls_pr_obj > elite_obj:
-                elite_solution = copy.deepcopy(ls_pr_solution)
-                elite_obj = ls_pr_obj
-        else:
-            elite_solution = copy.deepcopy(ls_solution)
-            elite_obj = ls_obj
-        print()
-        print("Elite obj :", elite_obj)
+            if elite_solution:
+                print("2. Path Relinking :", obj)
+                output_solution = solution.path_relinking(initial_solution=elite_solution,
+                                                                 insertion_method=insertion_method,
+                                                                 alpha=alpha,
+                                                                 nb_attempts_insert=nb_attempts_insert)
+                solution = output_solution
+                obj = solution.compute_obj
+                print("3. Second Local Search :", obj)
+                solution.local_search(insertion_method=insertion_method,
+                                                                     alpha=alpha,
+                                                                     max_iter=num_local_search,
+                                                                     nb_attempts_insert=nb_attempts_insert,
+                                                                     nb_swap=nb_swap)
+                obj = solution.compute_obj
+                if obj > elite_obj:
+                    elite_solution = copy.deepcopy(solution)
+            else:
+                elite_solution = copy.deepcopy(solution)
+            print()
+            print("Elite obj :", elite_solution.compute_obj)
+    
+    except RuntimeError as r:
+        obj = solution.compute_obj
+        if obj > elite_obj:
+            elite_solution = copy.deepcopy(solution)
+        pass
 
+    stats = {}
+    time_elapsed = time.clock() - time_start
+    stats["time"] = time_elapsed
+    stats["GRASP iterations"] = GRASP_iterations
+    return elite_solution, stats
+
+
+def test_solution(solution):
     print()
     print("---------------------------------------------------------")
-    print("            Tests on the final best solution                        ")
+    print("            Tests on the best solution found                       ")
     print("---------------------------------------------------------")
     print()
+    try:
+        solution.check_valid_solution()
+    except ValueError as e:
+        print(e)
 
-    print("Final solution is valid :", elite_solution.check_valid_solution())
 
+def print_stats(solution, stats: Dict):
     print()
     print("---------------------------------------------------------")
     print("                     Final stats                         ")
     print("---------------------------------------------------------")
     print()
-
-    all_individual_delays, all_individual_delays_per, all_individual_economies_per = elite_solution.all_individual_stats
-    time_elapsed = time.clock() - time_start
+    nb_requests = solution.nb_requests
+    obj = solution.compute_obj
+    all_individual_delays, all_individual_delays_per, all_individual_economies_per = solution.all_individual_stats
     print("Number of requests :", nb_requests)
-    print("Number of GRASP iterations :", GRASP_iteration)
-    print("Best obj :", elite_obj)
-    print("Percentage of pooling : %0.1f %%" % (elite_obj*100 / nb_requests))
+    print("Number of GRASP iterations :", stats["GRASP iterations"])
+    print("Best obj :", obj)
+    print("Percentage of pooling : %0.1f %%" % (obj*100 / nb_requests))
 
     print()
     print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)"
@@ -244,8 +256,39 @@ def main():
     print("Minimum price saving : -%0.1f %%" % (min(all_individual_economies_per)))
 
     print()
-    print("Computation time : %0.2f sec" % (round(time_elapsed, 2)))
-    print("Average computation time by iteration : %0.2f sec" % (round(time_elapsed, 2) / GRASP_iteration))
+    print("Computation time : %d sec" % (round(stats["time"])))
+    print("Average computation time by iteration : %0.2f sec" % (round(stats["time"], 2) / stats["GRASP iterations"]))
+
+
+def main():
+    args = setup()
+    if args.data_saved:
+        with open(args.checkpoint_dataset, "rb") as f:
+            requests = pickle.load(f)[:args.test_size]
+    else:
+        dataset = read_dataset(args.input, args.size, args.time_window)
+        requests = initialize_requests(dataset, timeframe=args.timeframe)[:args.test_size]
+        with open(args.checkpoint_dataset, "wb") as f:
+            pickle.dump(requests, f)
+    nb_requests = len(requests)
+
+    def handler(signum, frame):
+        raise RuntimeError("End of the %d sec" % (args.time_limit))
+
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(args.time_limit)
+
+    print("Starting GRASP iterations...")
+    elite_solution, stats = run_GRASP_heuristic(requests=requests,
+                                                insertion_method=args.insertion_method,
+                                                alpha=args.alpha,
+                                                beta=args.beta,
+                                                limit_RCL=args.limit_RCL,
+                                                num_local_search=args.num_local_search,
+                                                nb_attempts_insert=args.nb_attempts_insert,
+                                                nb_swap=args.nb_swap)
+    test_solution(elite_solution)
+    print_stats(elite_solution, stats)
 
 
 if __name__ == "__main__":

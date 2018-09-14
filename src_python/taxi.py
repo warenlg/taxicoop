@@ -36,7 +36,7 @@ class Taxi:
         IB stands for the heuristic method.
         """
         if any(r[1].id == request.id for r in self.route):
-            raise Exception("Impossible to insert a request in a route where it is already there")
+            raise ValueError("Impossible to insert a request in a route where it is already there")
 
         if method is IA:
             for pu in range(len(self.route) + 1):
@@ -51,7 +51,7 @@ class Taxi:
                     if valid:
                         self.route = route2
                         return
-            raise Exception("could not insert request %d into the route %s" % (request.id, self.route))
+            raise StopIteration("could not insert request %d into the route %s" % (request.id, self.route))
 
         if method is IB:
             cur_delay = 100000
@@ -71,7 +71,7 @@ class Taxi:
                 self.route = route3
                 return
             except UnboundLocalError:
-                raise Exception("could not insert request %d into the route %s" % (request.id, self.route))
+                raise StopIteration("could not insert request %d into the route %s" % (request.id, self.route))
 
     def remove(self, request_id: int):
         """
@@ -102,24 +102,28 @@ class Taxi:
             self.update_delivery_datetimes(route)
             self.is_valid(route=route, alpha=alpha)
             self.route = route
-        except Exception:
-            raise Exception("could not swap point %d and point %d in route %s" % (pos1, pos2, self.route))
+        except ValueError:
+            raise StopIteration("could not swap point %d and point %d in route %s" % (pos1, pos2, self.route))
 
     def delay(self, route):
         """
         Returns the delay of the route.
         """
-        request_delays = {}
-        for point in route:
-            if point[1].id not in request_delays:
-                request_delays[point[1].id] = point[0]
-            else:
-                request_delays[point[1].id] = abs(request_delays[point[1].id] - point[0])
-                - travel_time(point[1].PU_coordinates, point[1].DO_coordinates)
-        assert len(request_delays) == len(route) / 2
-        delay = round(sum(request_delays.values()), 3)
-        assert delay >= 0
-        return delay
+        if len(route) == 2:
+            delay = 0
+            return delay
+        else:
+            request_delays = {}
+            for point in route:
+                if point[1].id not in request_delays:
+                    request_delays[point[1].id] = point[0]
+                else:
+                    request_delays[point[1].id] = abs(request_delays[point[1].id] - point[0])
+                    - travel_time(point[1].PU_coordinates, point[1].DO_coordinates)
+            assert len(request_delays) == len(route) / 2
+            delay = round(sum(request_delays.values()), 3)
+            assert delay >= 0
+            return delay
 
     @property
     def individual_stats(self):
@@ -148,6 +152,8 @@ class Taxi:
         individual_delays_per = copy.deepcopy(individual_delays)
         for r_id in individual_delays.keys():
             time = travel_time(coordinates[r_id][0], coordinates[r_id][1])
+            #if time == 0:
+                #import pdb;pdb.set_trace()
             cost = haversine(coordinates[r_id][0], coordinates[r_id][1])
 
             individual_delays[r_id] -= time
