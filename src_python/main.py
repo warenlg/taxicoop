@@ -161,51 +161,42 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
             print("----- Iteration %d ----- : %0.2f" % (GRASP_iterations, time.clock() - time_start))
             solution = Solution(requests=requests)
             solution.build_initial_solution(insertion_method=insertion_method,
-                                                 alpha=alpha,
-                                                 beta=beta,
-                                                 limit_RCL=limit_RCL)
-
-            obj = solution.compute_obj
-            if obj == nb_requests:
-                elite_solution = copy.deepcopy(solution)
-                break
-
-            print("1. Local Search :", obj)
+                                            alpha=alpha,
+                                            beta=beta,
+                                             limit_RCL=limit_RCL)
+            solution.check_UB()
+            print("1. Local Search :", solution.compute_obj)
             solution.local_search(insertion_method=insertion_method,
-                                                             alpha=alpha,
-                                                             max_iter=num_local_search,
-                                                             nb_attempts_insert=nb_attempts_insert,
-                                                             nb_swap=nb_swap)
-            obj = solution.compute_obj
-            if obj == nb_requests:
-                elite_solution = copy.deepcopy(solution)
-                break
+                                  alpha=alpha,
+                                  max_iter=num_local_search,
+                                  nb_attempts_insert=nb_attempts_insert,
+                                  nb_swap=nb_swap)
 
+            solution.check_UB()
             if elite_solution:
-                print("2. Path Relinking :", obj)
+                print("2. Path Relinking :", solution.compute_obj)
                 output_solution = solution.path_relinking(initial_solution=elite_solution,
-                                                                 insertion_method=insertion_method,
-                                                                 alpha=alpha,
-                                                                 nb_attempts_insert=nb_attempts_insert)
+                                                          insertion_method=insertion_method,
+                                                          alpha=alpha,
+                                                          nb_attempts_insert=nb_attempts_insert)
                 solution = output_solution
-                obj = solution.compute_obj
-                print("3. Second Local Search :", obj)
+                solution.check_UB()
+                print("3. Second Local Search :", solution.compute_obj)
                 solution.local_search(insertion_method=insertion_method,
-                                                                     alpha=alpha,
-                                                                     max_iter=num_local_search,
-                                                                     nb_attempts_insert=nb_attempts_insert,
-                                                                     nb_swap=nb_swap)
-                obj = solution.compute_obj
-                if obj > elite_obj:
+                                      alpha=alpha,
+                                      max_iter=num_local_search,
+                                      nb_attempts_insert=nb_attempts_insert,
+                                      nb_swap=nb_swap)
+                solution.check_UB()
+                if solution.compute_obj > elite_obj:
                     elite_solution = copy.deepcopy(solution)
             else:
                 elite_solution = copy.deepcopy(solution)
             print()
             print("Elite obj :", elite_solution.compute_obj)
     
-    except RuntimeError as r:
-        obj = solution.compute_obj
-        if obj > elite_obj:
+    except (RuntimeError, StopIteration) as r:
+        if solution.compute_obj > elite_solution.compute_obj:
             elite_solution = copy.deepcopy(solution)
         pass
 

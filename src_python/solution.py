@@ -133,9 +133,9 @@ class Solution:
                 print("  -- it ", i)
                 pending_requests = self.pending_requests
                 next_solution = self.insert_requests(requests=pending_requests,
-                                                                insertion_method=insertion_method,
-                                                                alpha=alpha,
-                                                                nb_attempts=nb_attempts_insert)
+                                                     insertion_method=insertion_method,
+                                                     alpha=alpha,
+                                                     nb_attempts=nb_attempts_insert)
                 next_obj = next_solution.compute_obj
                 if next_obj > current_obj:
                     self = next_solution
@@ -147,8 +147,8 @@ class Solution:
                     nb_success = 0
                     for s in range(nb_swap):
                         success = self.swap_requests(insertion_method=insertion_method,
-                                                                                alpha=alpha,
-                                                                                nb_attempts=nb_swap)
+                                                     alpha=alpha,
+                                                     nb_attempts=nb_swap)
                         nb_success += int(success)
                     print("     nb swap : %d / %d" % (nb_success, nb_swap))
 
@@ -175,7 +175,7 @@ class Solution:
 
         # no need to do the path relinking if the pending requests in s1 are also pending in s2
         if len(initial_pending_requests) == 0:
-            return initial_solution, initial_solution.compute_obj
+            return initial_solution
 
         self_routes, other_requests = self.get_taxis_from_requests(requests=initial_pending_requests)
         requests_to_merge = set.intersection(set(other_requests.keys()),
@@ -336,7 +336,10 @@ class Solution:
         if requests is None:
             success = False
             delays = copy.deepcopy(self.delays)
-            taxi_id1, taxi_id2 = random.sample(delays[:int(nb_attempts/2)], 2)
+            try:
+                taxi_id1, taxi_id2 = random.sample(delays[:int(nb_attempts/2)], 2)
+            except ValueError:
+                taxi_id1, taxi_id2 = random.sample(delays, 2)
             try:
                 solution = copy.deepcopy(self)
                 taxi1 = solution.taxis[taxi_id1[0]]
@@ -456,6 +459,11 @@ class Solution:
         raise StopIteration("%d attempts to swap 2 points of a same request"
                         " without finding any valid route." % nb_attempts)
 
+    def check_UB(self):
+        if self.compute_obj == self.nb_requests:
+            raise StopIteration("UB reached ! Stop the algorithm.")
+
+    
     def check_valid_solution(self):
         """
         Test function that returns an exception if at leat one request is served twice in the solution.
