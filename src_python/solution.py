@@ -433,15 +433,19 @@ class Solution:
     def all_individual_stats(self):
         all_individual_delays = []
         all_individual_delays_per = []
-        all_individual_economies_per = []
+        all_individual_savings_per = []
+        all_individual_earlier_starts = []
+        all_individual_earlier_starts_per = []
         for i, taxi in enumerate(self.taxis):
             if len(taxi.route) > 2:
-                individual_delays, individual_delays_per, individual_economies_per = taxi.individual_stats
+                individual_delays, individual_delays_per, individual_savings_per, individual_earlier_starts, individual_earlier_starts_per = taxi.individual_stats
                 for r_id in individual_delays.keys():
                     all_individual_delays.append(individual_delays[r_id])
                     all_individual_delays_per.append(individual_delays_per[r_id])
-                    all_individual_economies_per.append(individual_economies_per[r_id])
-        return all_individual_delays, all_individual_delays_per, all_individual_economies_per
+                    all_individual_savings_per.append(individual_savings_per[r_id])
+                    all_individual_earlier_starts.append(individual_earlier_starts[r_id])
+                    all_individual_earlier_starts_per.append(individual_earlier_starts_per[r_id])
+        return all_individual_delays, all_individual_delays_per, all_individual_savings_per, all_individual_earlier_starts, all_individual_earlier_starts_per
 
     def swap_points(self, nb_attempts: int=10):
         """

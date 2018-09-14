@@ -23,8 +23,8 @@ class Taxi:
         [(B3_source, request_3, PU_coordinates_3), (B6_source, request_6, PU_coordinates_6),
         (B3_destination, request_3, DO_coordinates_3), (B6_destination, request_6, DO_coordinates_6)]
         """
-        B_source = request.PU_datetime[0]
-        B_destination = request.PU_datetime[0] + travel_time(request.PU_coordinates, request.DO_coordinates)
+        B_source = request.PU_datetime[1]
+        B_destination = B_source + travel_time(request.PU_coordinates, request.DO_coordinates)
         self.route = [[B_source, request, request.PU_coordinates], [B_destination, request, request.DO_coordinates]]
         self.capacity = capacity
         self.speed = speed
@@ -127,9 +127,17 @@ class Taxi:
 
     @property
     def individual_stats(self):
+        """
+        Stats includes per client:
+        - delay: the time delay
+        - saving: the price saving compared to an individual course
+        - earlier_start: the time gap between the requested Pick Up datetime and the real one which is earlier
+        """
         on_board = []
         individual_delays = defaultdict(int)
-        individual_economies_per = defaultdict(int)
+        individual_savings_per = defaultdict(int)
+        individual_earlier_starts = defaultdict(int)
+        real_times = defaultdict(int)
         coordinates = defaultdict(list)
         for i, point in enumerate(self.route[:-1]):
             time = travel_time(self.route[i][2], self.route[i+1][2])
@@ -137,34 +145,40 @@ class Taxi:
             if point[1].id not in on_board:
                 on_board.append(point[1].id)
                 coordinates[point[1].id].append(point[2])
+                individual_earlier_starts[point[1].id] = point[1].PU_datetime[1] - point[0]
             else:
                 on_board.remove(point[1].id)
                 coordinates[point[1].id].append(point[2])
+
             for r_id in on_board:
                 individual_delays[r_id] += time
-                individual_economies_per[r_id] += cost / len(on_board)
+                individual_savings_per[r_id] += cost / len(on_board)
         coordinates[self.route[-1][1].id].append(self.route[-1][2])
 
-        assert len(individual_delays) == len(individual_economies_per)
+        assert len(individual_delays) == len(individual_savings_per)
+        assert len(individual_delays) == len(individual_earlier_starts)
         assert len(on_board) == 1
         assert [len(t) for t in coordinates.values()] == [2 for _ in range(int(len(self.route) / 2))]
 
         individual_delays_per = copy.deepcopy(individual_delays)
+        individual_earlier_starts_per = copy.deepcopy(individual_earlier_starts)
         for r_id in individual_delays.keys():
             time = travel_time(coordinates[r_id][0], coordinates[r_id][1])
-            #if time == 0:
-                #import pdb;pdb.set_trace()
             cost = haversine(coordinates[r_id][0], coordinates[r_id][1])
+
+            assert individual_earlier_starts[r_id] >= 0
+            individual_earlier_starts_per[r_id] = individual_earlier_starts[r_id]*100 / individual_delays[r_id]
 
             individual_delays[r_id] -= time
             individual_delays_per[r_id] -= time
             assert individual_delays[r_id] >= 0
             individual_delays_per[r_id] = individual_delays_per[r_id]*100 / time
 
-            individual_economies_per[r_id] -= cost
-            assert individual_economies_per[r_id] <= 0
-            individual_economies_per[r_id] = abs(individual_economies_per[r_id])*100 / cost
-        return individual_delays, individual_delays_per, individual_economies_per
+            individual_savings_per[r_id] -= cost
+            assert individual_savings_per[r_id] <= 0
+            individual_savings_per[r_id] = abs(individual_savings_per[r_id])*100 / cost
+
+        return individual_delays, individual_delays_per, individual_savings_per, individual_earlier_starts, individual_earlier_starts_per
 
     def is_valid(self, route, alpha: float) -> bool:
         """

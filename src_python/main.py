@@ -227,7 +227,7 @@ def print_stats(solution, stats: Dict):
     print()
     nb_requests = solution.nb_requests
     obj = solution.compute_obj
-    all_individual_delays, all_individual_delays_per, all_individual_economies_per = solution.all_individual_stats
+    all_individual_delays, all_individual_delays_per, all_individual_savings_per, all_individual_earlier_starts, all_individual_earlier_starts_per = solution.all_individual_stats
     print("Number of requests :", nb_requests)
     print("Number of GRASP iterations :", stats["GRASP iterations"])
     print("Best obj :", obj)
@@ -242,9 +242,16 @@ def print_stats(solution, stats: Dict):
 
     print()
     print("Average price saving for the customers accepting the pooling : -%0.1f %%"
-          % (mean(all_individual_economies_per)))
-    print("Maximum price saving : -%0.1f %%" % (max(all_individual_economies_per)))
-    print("Minimum price saving : -%0.1f %%" % (min(all_individual_economies_per)))
+          % (mean(all_individual_savings_per)))
+    print("Maximum price saving : -%0.1f %%" % (max(all_individual_savings_per)))
+    print("Minimum price saving : -%0.1f %%" % (min(all_individual_savings_per)))
+
+    print()
+    print("Average time advance the clients are pickep up with : %0.1f sec (+%d %%)"
+          % (mean(all_individual_earlier_starts), mean(all_individual_earlier_starts_per)))
+    print("Standard Deviation of the pick up time advance : %d sec" % (stdev(all_individual_earlier_starts)))
+    print("Maximum pick up time advance : %d sec (+%d %%)" % (max(all_individual_earlier_starts), max(all_individual_earlier_starts_per)))
+    print("Minimum pick up time advance : %d sec (+%d %%)" % (min(all_individual_earlier_starts), min(all_individual_earlier_starts_per)))
 
     print()
     print("Computation time : %d sec" % (round(stats["time"])))
