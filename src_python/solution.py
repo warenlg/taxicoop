@@ -436,7 +436,7 @@ class Solution:
         all_individual_savings_per = []
         all_individual_earlier_starts = []
         all_individual_earlier_starts_per = []
-        for i, taxi in enumerate(self.taxis):
+        for taxi in self.taxis:
             if len(taxi.route) > 2:
                 individual_delays, individual_delays_per, individual_savings_per, individual_earlier_starts, individual_earlier_starts_per = taxi.individual_stats
                 for r_id in individual_delays.keys():
@@ -446,6 +446,13 @@ class Solution:
                     all_individual_earlier_starts.append(individual_earlier_starts[r_id])
                     all_individual_earlier_starts_per.append(individual_earlier_starts_per[r_id])
         return all_individual_delays, all_individual_delays_per, all_individual_savings_per, all_individual_earlier_starts, all_individual_earlier_starts_per
+
+    @property
+    def global_stats(self):
+        nb_clients = []
+        for taxi in self.taxis:
+            nb_clients.append(len(taxi.route) / 2)
+        return nb_clients
 
     def swap_points(self, nb_attempts: int=10):
         """

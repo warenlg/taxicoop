@@ -156,14 +156,13 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
     time_start = time.clock()
     try:
         while nb_requests - elite_obj is not 0:
-            GRASP_iterations += 1
             print()
-            print("----- Iteration %d ----- : %0.2f" % (GRASP_iterations, time.clock() - time_start))
+            print("----- Iteration %d ----- : %0.2f" % (GRASP_iterations + 1, time.clock() - time_start))
             solution = Solution(requests=requests)
             solution.build_initial_solution(insertion_method=insertion_method,
                                             alpha=alpha,
                                             beta=beta,
-                                             limit_RCL=limit_RCL)
+                                            limit_RCL=limit_RCL)
             solution.check_UB()
             print("1. Local Search :", solution.compute_obj)
             solution.local_search(insertion_method=insertion_method,
@@ -190,10 +189,12 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
                 solution.check_UB()
                 if solution.compute_obj > elite_obj:
                     elite_solution = copy.deepcopy(solution)
+                GRASP_iterations += 1
             else:
                 elite_solution = copy.deepcopy(solution)
             print()
             print("Elite obj :", elite_solution.compute_obj)
+            time_elapsed_it = time.clock() - time_start
     
     except (RuntimeError, StopIteration) as r:
         if solution.compute_obj > elite_solution.compute_obj:
@@ -202,7 +203,7 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
 
     stats = {}
     time_elapsed = time.clock() - time_start
-    stats["time"] = time_elapsed
+    stats["time"] = (time_elapsed, time_elapsed_it)
     stats["GRASP iterations"] = GRASP_iterations
     return elite_solution, stats
 
@@ -215,14 +216,14 @@ def test_solution(solution):
     print()
     try:
         solution.check_requests_served_once()
-        solution.visualize()
         solution.check_time_windows()
-        print("Fianl best solution valid")
+        #solution.visualize()
+        print("Final best solution valid")
     except ValueError as e:
         print(e)
 
 
-def print_stats(solution, stats: Dict):
+def print_stats(args, solution, stats: Dict):
     print()
     print("---------------------------------------------------------")
     print("                     Final stats                         ")
@@ -231,10 +232,18 @@ def print_stats(solution, stats: Dict):
     nb_requests = solution.nb_requests
     obj = solution.compute_obj
     all_individual_delays, all_individual_delays_per, all_individual_savings_per, all_individual_earlier_starts, all_individual_earlier_starts_per = solution.all_individual_stats
+    nb_clients = solution.global_stats
     print("Number of requests :", nb_requests)
     print("Number of GRASP iterations :", stats["GRASP iterations"])
     print("Best obj :", obj)
     print("Percentage of pooling : %0.1f %%" % (obj*100 / nb_requests))
+
+    print()
+    print("Capacity of the taxis : %d" % (args.capacity))
+    print("Speed of the taxis : %d km/h" % (args.speed))
+    print("Average number of clients served by taxi : %0.2f" % (mean(nb_clients)))
+    print("Maximum number of clients served by 1 taxi : %d" % (max(nb_clients)))
+
 
     print()
     print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)"
@@ -244,21 +253,22 @@ def print_stats(solution, stats: Dict):
     print("Minimum delay : %0.1f sec (+%0.1f %%)" % (min(all_individual_delays), min(all_individual_delays_per)))
 
     print()
+    print("Value of alpha : %0.2f" % (args.alpha))
     print("Average price saving for the customers accepting the pooling : -%0.1f %%"
           % (mean(all_individual_savings_per)))
     print("Maximum price saving : -%0.1f %%" % (max(all_individual_savings_per)))
     print("Minimum price saving : -%0.1f %%" % (min(all_individual_savings_per)))
 
     print()
-    print("Average time advance the clients are pickep up with : %0.1f sec (+%d %%)"
+    print("Average time advance the clients are pickep up with : %0.1f sec (+%0.1f %%)"
           % (mean(all_individual_earlier_starts), mean(all_individual_earlier_starts_per)))
-    print("Standard Deviation of the pick up time advance : %d sec" % (stdev(all_individual_earlier_starts)))
-    print("Maximum pick up time advance : %d sec (+%d %%)" % (max(all_individual_earlier_starts), max(all_individual_earlier_starts_per)))
-    print("Minimum pick up time advance : %d sec (+%d %%)" % (min(all_individual_earlier_starts), min(all_individual_earlier_starts_per)))
+    print("Standard Deviation of the pick up time advance : %0.1f sec" % (stdev(all_individual_earlier_starts)))
+    print("Maximum pick up time advance : %0.1f sec (+%0.1f %%)" % (max(all_individual_earlier_starts), max(all_individual_earlier_starts_per)))
+    print("Minimum pick up time advance : %0.1f sec (+%0.1f %%)" % (min(all_individual_earlier_starts), min(all_individual_earlier_starts_per)))
 
     print()
-    print("Computation time : %d sec" % (round(stats["time"])))
-    print("Average computation time by iteration : %0.2f sec" % (round(stats["time"], 2) / stats["GRASP iterations"]))
+    print("Computation time : %d sec" % (round(stats["time"][0])))
+    print("Average computation time by iteration : %0.2f sec" % (round(stats["time"][1], 2) / stats["GRASP iterations"]))
 
 
 def main():
@@ -279,6 +289,7 @@ def main():
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(args.time_limit)
 
+    print()
     print("Starting GRASP iterations...")
     elite_solution, stats = run_GRASP_heuristic(requests=requests,
                                                 insertion_method=args.insertion_method,
@@ -289,7 +300,7 @@ def main():
                                                 nb_attempts_insert=args.nb_attempts_insert,
                                                 nb_swap=args.nb_swap)
     test_solution(elite_solution)
-    print_stats(elite_solution, stats)
+    print_stats(args, elite_solution, stats)
 
 
 if __name__ == "__main__":
