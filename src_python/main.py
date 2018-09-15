@@ -153,6 +153,7 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
     elite_solution = None
     elite_obj = 0
     GRASP_iterations = 0
+    initial_objs = []
     time_start = time.clock()
     try:
         while nb_requests - elite_obj is not 0:
@@ -164,7 +165,9 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
                                             beta=beta,
                                             limit_RCL=limit_RCL)
             solution.check_UB()
-            print("1. Local Search :", solution.compute_obj)
+            obj = solution.compute_obj
+            initial_objs.append(obj)
+            print("1. Local Search :", obj)
             solution.local_search(insertion_method=insertion_method,
                                   alpha=alpha,
                                   max_iter=num_local_search,
@@ -205,7 +208,7 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
     time_elapsed = time.clock() - time_start
     stats["time"] = (time_elapsed, time_elapsed_it)
     stats["GRASP iterations"] = GRASP_iterations
-    return elite_solution, stats
+    return elite_solution, stats, initial_objs
 
 
 def test_solution(solution):
@@ -223,7 +226,7 @@ def test_solution(solution):
         print(e)
 
 
-def print_stats(args, solution, stats: Dict):
+def print_stats(args, solution, stats: Dict, initial_objs: List[int]):
     print()
     print("---------------------------------------------------------")
     print("                     Final stats                         ")
@@ -243,7 +246,7 @@ def print_stats(args, solution, stats: Dict):
     print("Speed of the taxis : %d km/h" % (args.speed))
     print("Average number of clients served by taxi : %0.2f" % (mean(nb_clients)))
     print("Maximum number of clients served by 1 taxi : %d" % (max(nb_clients)))
-
+    print("Average objective value of the initial greedy solutiotns %0.1f %%" % (mean(initial_objs)*100 / nb_requests))
 
     print()
     print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)"
@@ -291,16 +294,16 @@ def main():
 
     print()
     print("Starting GRASP iterations...")
-    elite_solution, stats = run_GRASP_heuristic(requests=requests,
-                                                insertion_method=args.insertion_method,
-                                                alpha=args.alpha,
-                                                beta=args.beta,
-                                                limit_RCL=args.limit_RCL,
-                                                num_local_search=args.num_local_search,
-                                                nb_attempts_insert=args.nb_attempts_insert,
-                                                nb_swap=args.nb_swap)
+    elite_solution, stats, initial_objs = run_GRASP_heuristic(requests=requests,
+                                                              insertion_method=args.insertion_method,
+                                                              alpha=args.alpha,
+                                                              beta=args.beta,
+                                                              limit_RCL=args.limit_RCL,
+                                                              num_local_search=args.num_local_search,
+                                                              nb_attempts_insert=args.nb_attempts_insert,
+                                                              nb_swap=args.nb_swap)
     test_solution(elite_solution)
-    print_stats(args, elite_solution, stats)
+    print_stats(args, elite_solution, stats, initial_objs)
 
 
 if __name__ == "__main__":
