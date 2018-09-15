@@ -41,10 +41,10 @@ class Taxi:
         if method is IA:
             for pu in range(len(self.route) + 1):
                 route1 = copy.deepcopy(self.route)
-                route1.insert(pu, [request.PU_datetime[0], request, request.PU_coordinates])
+                route1.insert(pu, [request.PU_datetime[1], request, request.PU_coordinates])
                 for do in range(pu + 1, len(route1) + 1):
                     route2 = copy.deepcopy(route1)
-                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates,
+                    route2.insert(do, [request.PU_datetime[1] + travel_time(request.PU_coordinates,
                                                                             request.DO_coordinates),
                                   request, request.DO_coordinates])
                     valid = self.is_valid(route=route2, alpha=alpha)
@@ -57,10 +57,10 @@ class Taxi:
             cur_delay = 100000
             for pu in range(len(self.route) + 1):
                 route1 = copy.deepcopy(self.route)
-                route1.insert(pu, [request.PU_datetime[0], request, request.PU_coordinates])
+                route1.insert(pu, [request.PU_datetime[1], request, request.PU_coordinates])
                 for do in range(pu + 1, len(route1) + 1):
                     route2 = copy.deepcopy(route1)
-                    route2.insert(do, [request.PU_datetime[0] + travel_time(request.PU_coordinates,
+                    route2.insert(do, [request.PU_datetime[1] + travel_time(request.PU_coordinates,
                                                                             request.DO_coordinates),
                                   request, request.DO_coordinates])
                     valid = self.is_valid(route=route2, alpha=alpha)
@@ -232,21 +232,40 @@ class Taxi:
 
         # 4. The time windows of the passengers
         served_requests = []
+    #    print()
+    #    print("route :", [p[1].id for p in route])
+    #    print("time :", [round(p[0]) for p in route])
         for i in range(len(route) - 1):
+    #        print("r id :", route[i][1].id)
+    #        print("r id PU datetime :", route[i][1].PU_datetime)
+    #        print("r id DO datetime :", route[i][1].DO_datetime)
+    #        print("r id + 1 PU datetime :", route[i+1][1].PU_datetime)
+    #        print("r id + 1 DO datetime :", route[i+1][1].DO_datetime)
             # updates the delivery datetimes of the route after the insertions
             time_to_next_point = travel_time(route[i][2], route[i+1][2])
             if route[i][0] + time_to_next_point > route[i+1][0]:
-                route[i+1][0] = route[i][0] + time_to_next_point
+                for j in range(i+1):
+                    route[i][0] -= time_to_next_point
+                #route[i+1][0] = route[i][0] + time_to_next_point
+    #        print("time :", [round(p[0]) for p in route])
 
             # source point
             if route[i][1].id not in served_requests and route[i][0] > route[i][1].PU_datetime[1]:
+    #            print("1")
                 return False
             # destination point
             elif route[i][1].id in served_requests and route[i][0] > route[i][1].DO_datetime[1]:
+    #            print("2")
                 return False
             served_requests.append(route[i][1].id)
 
         # last point of the route
         if route[-1][0] > route[-1][1].DO_datetime[1]:
+    #        print("3")
             return False
+
+        for i in range(len(route)):
+            if route[i][0] < route[i][1].PU_datetime[0]:
+    #            print("4")
+                return False
         return True

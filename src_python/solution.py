@@ -184,16 +184,16 @@ class Solution:
             for req_id in requests_to_merge:
                 initial_pending_requests.remove(req_id)
             initial_solution.merge_pending_requests(requests=requests_to_merge,
-                                                                       other_requests=other_requests,
-                                                                       insertion_method=insertion_method,
-                                                                       alpha=alpha)
+                                                    other_requests=other_requests,
+                                                    insertion_method=insertion_method,
+                                                    alpha=alpha)
         print("     1. obj :", initial_solution.compute_obj)
 
         initial_pending_requests = initial_solution.insert_requests(requests=initial_pending_requests,
-                                                                                      insertion_method=insertion_method,
-                                                                                      alpha=alpha,
-                                                                                      nb_attempts=nb_attempts_insert,
-                                                                                      other_requests=other_requests)
+                                                                    insertion_method=insertion_method,
+                                                                    alpha=alpha,
+                                                                    nb_attempts=nb_attempts_insert,
+                                                                    other_requests=other_requests)
         print("     2. obj :", initial_solution.compute_obj)
 
         #initial_solution = initial_solution.guided_swap(requests=other_requests.values(),
@@ -468,7 +468,7 @@ class Solution:
             raise StopIteration("UB reached ! Stop the algorithm.")
 
     
-    def check_valid_solution(self):
+    def check_requests_served_once(self):
         """
         Test function that returns an exception if at leat one request is served twice in the solution.
         """
@@ -478,3 +478,6 @@ class Solution:
         elif len(served_requests) / 2 < len(set(served_requests)):
             raise ValueError("%d requests not served" % len(set(served_requests))) - (len(served_requests) / 2)
         print("The solution is valid.")
+
+    def check_time_windows(self):
+        for taxi in self.taxis
