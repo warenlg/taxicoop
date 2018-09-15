@@ -466,7 +466,6 @@ class Solution:
     def check_UB(self):
         if self.compute_obj == self.nb_requests:
             raise StopIteration("UB reached ! Stop the algorithm.")
-
     
     def check_requests_served_once(self):
         """
@@ -477,7 +476,23 @@ class Solution:
             raise ValueError("%d requests served twice" % (len(served_requests) / 2 - len(set(served_requests))))
         elif len(served_requests) / 2 < len(set(served_requests)):
             raise ValueError("%d requests not served" % len(set(served_requests))) - (len(served_requests) / 2)
-        print("The solution is valid.")
+
 
     def check_time_windows(self):
-        for taxi in self.taxis
+        for taxi in self.taxis:
+            served_requests = []
+            for point in taxi.route:
+                # source
+                if point[1].id not in served_requests and (point[0] < point[1].PU_datetime[0] or point[0] > point[1].PU_datetime[1]):
+                    raise ValueError("Time window not satisfied for request %d" % (point[1].id))
+                # destination
+                if point[1].id in served_requests and point[0] > point[1].DO_datetime[1]:
+                    raise ValueError("Time window not satisfied for request %d" % (point[1].id))
+                served_requests.append(point[1].id)
+
+    def visualize(self):
+        for i, taxi in enumerate(self.taxis):
+            print()
+            print("taxi :", i)
+            print("route :", [p[1].id for p in taxi.route])
+            print("time :", [round(p[0]) for p in taxi.route])                

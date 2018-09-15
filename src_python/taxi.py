@@ -188,15 +188,15 @@ class Taxi:
             3. The cost constraint
             4. The time windows of the passengers
         """
-        served_request = []
+        served_requests = []
         loading_timeline = [0]
         for i, x in enumerate(route):
-            if x[1].id not in served_request:
+            if x[1].id not in served_requests:
                 loading_timeline.append(loading_timeline[-1] + 1)
                 # 1. The capacity constraint
                 if loading_timeline[-1] > self.capacity:
                     return False
-                served_request.append(x[1].id)
+                served_requests.append(x[1].id)
             else:
                 loading_timeline.append(loading_timeline[-1] - 1)
                 # 2. No stops permitted in the taxi's route
@@ -232,40 +232,38 @@ class Taxi:
 
         # 4. The time windows of the passengers
         served_requests = []
-    #    print()
-    #    print("route :", [p[1].id for p in route])
-    #    print("time :", [round(p[0]) for p in route])
         for i in range(len(route) - 1):
-    #        print("r id :", route[i][1].id)
-    #        print("r id PU datetime :", route[i][1].PU_datetime)
-    #        print("r id DO datetime :", route[i][1].DO_datetime)
-    #        print("r id + 1 PU datetime :", route[i+1][1].PU_datetime)
-    #        print("r id + 1 DO datetime :", route[i+1][1].DO_datetime)
             # updates the delivery datetimes of the route after the insertions
             time_to_next_point = travel_time(route[i][2], route[i+1][2])
             if route[i][0] + time_to_next_point > route[i+1][0]:
-                for j in range(i+1):
-                    route[i][0] -= time_to_next_point
-                #route[i+1][0] = route[i][0] + time_to_next_point
-    #        print("time :", [round(p[0]) for p in route])
+                if route[i][1].id not in served_requests: # i source
+                    served_requests.append(route[i][1].id)
+                    if route[i+1][1].id in served_requests: # i+1 destination
+                        route[i+1][0] += time_to_next_point - (route[i+1][0] - route[i][0])
+                    else: # i+1 source
+                        for j in range(i+1):
+                            route[j][0] -= time_to_next_point - route[i+1][0]
+                else: # i destination
+                    if route[i+1][1].id in served_requests: # i+1 destination
+                        route[i+1][0] += time_to_next_point - (route[i+1][0] - route[i][0])
+                    else: # i+1 source
+                        for j in range(i+1):
+                            route[j][0] -= route[i][0] + time_to_next_point            
+            else:
+                served_requests.append(route[i][1].id)
 
-            # source point
-            if route[i][1].id not in served_requests and route[i][0] > route[i][1].PU_datetime[1]:
-    #            print("1")
-                return False
-            # destination point
-            elif route[i][1].id in served_requests and route[i][0] > route[i][1].DO_datetime[1]:
-    #            print("2")
-                return False
-            served_requests.append(route[i][1].id)
+            # check for violated time window constraints
+            sr = []
+            for j in range(i+1):
+                # source
+                if route[j][1].id not in sr and (route[j][0] < route[j][1].PU_datetime[0] or route[j][0] > route[j][1].PU_datetime[1]):
+                    return False
+                # destination
+                if route[j][1].id in sr and route[j][0] > route[j][1].DO_datetime[1]:
+                    return False
+                sr.append(route[j][1].id)
 
-        # last point of the route
-        if route[-1][0] > route[-1][1].DO_datetime[1]:
-    #        print("3")
+        # check for the last point of the route
+        if route[-1][0] < route[-1][1].DO_datetime[0] or route[-1][0] > route[-1][1].DO_datetime[1]:
             return False
-
-        for i in range(len(route)):
-            if route[i][0] < route[i][1].PU_datetime[0]:
-    #            print("4")
-                return False
         return True

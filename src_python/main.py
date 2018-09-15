@@ -214,7 +214,10 @@ def test_solution(solution):
     print("---------------------------------------------------------")
     print()
     try:
-        solution.check_valid_solution()
+        solution.check_requests_served_once()
+        solution.visualize()
+        solution.check_time_windows()
+        print("Fianl best solution valid")
     except ValueError as e:
         print(e)
 
