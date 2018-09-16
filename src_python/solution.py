@@ -13,18 +13,20 @@ class Solution:
         self.nb_requests = len(requests)
         self.taxis = []
 
-    def build_initial_solution(self, insertion_method: str, alpha: float, beta: float, limit_RCL: float):
+    def build_initial_solution(self, insertion_method: str, alpha: float, beta: float,
+                               limit_RCL: float, capacity: int, speed: int):
         """
         Builds the initial greedy solution at the beginning of each GRASP iteration.
         """
-        requests = copy.deepcopy(list(self.requests.keys()))
+        sol = copy.deepcopy(self)
+        requests = copy.deepcopy(list(sol.requests.keys()))
         random.shuffle(requests)
         random_id = requests.pop(0)
-        self.taxis.append(Taxi(self.requests[random_id]))
+        sol.taxis.append(Taxi(sol.requests[random_id], capacity, speed))
         while len(requests) > 0:
             # sys.stderr.write("requests pending : %d\r" % len(self.requests))
             # the lower mu is, the better
-            mu = self.get_greedy_function(taxi=self.taxis[-1], requests=requests)
+            mu = sol.get_greedy_function(taxi=sol.taxis[-1], requests=requests)
             mu_max = mu[max(mu, key=mu.get)]
             mu_min = mu[min(mu, key=mu.get)]
             RCL_UB = mu_min + beta * (mu_max - mu_min)
@@ -40,7 +42,7 @@ class Solution:
                 r_id = RCL.pop(0)
                 it += 1
                 try:
-                    self.taxis[-1].insert(request=self.requests[r_id],
+                    sol.taxis[-1].insert(request=sol.requests[r_id],
                                           alpha=alpha,
                                           method=insertion_method)
                     requests.remove(r_id)
@@ -52,9 +54,10 @@ class Solution:
             if len(RCL) == 0 or it > max_it:
                 try:
                     random_id = requests.pop(0)
-                    self.taxis.append(Taxi(self.requests[random_id]))
+                    sol.taxis.append(Taxi(sol.requests[random_id], capacity, speed))
                 except IndexError:
                     continue
+        return sol
 
     def get_greedy_function(self, taxi: Callable, requests: List) -> Dict:
         """
@@ -102,8 +105,11 @@ class Solution:
         """
         Computes the objective function to maximize i.e. the number of shared rides.
         """
-        private_rides = [taxi for taxi in self.taxis if len(taxi.route)/2 == 1]
-        return self.nb_requests - len(private_rides)
+        if len(self.taxis) == 0:
+            return 0
+        else:
+            private_rides = [taxi for taxi in self.taxis if len(taxi.route)/2 == 1]
+            return self.nb_requests - len(private_rides)
 
     @property
     def pending_requests(self) -> Set[int]:
@@ -268,7 +274,10 @@ class Solution:
                         except (ValueError, StopIteration):
                             continue
             for req_id in requests_inserted:
-                requests.remove(req_id)
+                try:
+                    requests.remove(req_id)
+                except KeyError:
+                    continue
             return requests
 
         else:

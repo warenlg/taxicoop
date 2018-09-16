@@ -1,8 +1,10 @@
 import argparse
+from collections import defaultdict
 import copy
 import csv
 import logging
 import pickle
+import random
 import signal
 import sys
 import time
@@ -56,8 +58,11 @@ def setup():
     parser.add_argument("--nb-swap", type=float, default=0.1,
                         help="Proportion of swap operations to perform in the local search among all requests"
                         "when no improvment has been found in the previous iteration.")
-    parser.add_argument("--test-size", type=int, default=200,
+    parser.add_argument("--test-size", type=int,
                         help="Number of requests to consider to test the algorithm.")
+    parser.add_argument("--nb-tests", type=int,
+                        help="Number of times to run the algorithm on random instances of given size"
+                             "with given parameters.")
     logging.basicConfig(level=logging.INFO)
     args = parser.parse_args()
     return args
@@ -117,10 +122,10 @@ def read_dataset(path: str, size: int=None, time_window: int=15) -> List[List[Tu
             request.append(DO_coordinates)
 
             # filtering
-            null_coordinates = PU_coordinates[0] == 0 and DO_coordinates[0] == 0
+            null_coordinates = (0 in PU_coordinates) or (0 in DO_coordinates)
             coordinates_too_far = DO_datetime - PU_datetime > 12*3600
             same_DO_PU_coordinates = PU_coordinates == DO_coordinates
-            if not (null_coordinates and coordinates_too_far and same_DO_PU_coordinates):
+            if not null_coordinates and not coordinates_too_far and not same_DO_PU_coordinates:
                 dataset.append(request)
 
         # sort the requests by Pick-Up datetime
@@ -148,7 +153,8 @@ def initialize_requests(dataset, timeframe: int) -> List:
     return requests
 
     
-def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_local_search, nb_attempts_insert, nb_swap):
+def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_local_search,
+                        nb_attempts_insert, nb_swap, capacity, speed):
     nb_requests = len(requests)
     elite_solution = None
     elite_obj = 0
@@ -160,10 +166,12 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
             print()
             print("----- Iteration %d ----- : %0.2f" % (GRASP_iterations + 1, time.clock() - time_start))
             solution = Solution(requests=requests)
-            solution.build_initial_solution(insertion_method=insertion_method,
+            solution = solution.build_initial_solution(insertion_method=insertion_method,
                                             alpha=alpha,
                                             beta=beta,
-                                            limit_RCL=limit_RCL)
+                                            limit_RCL=limit_RCL,
+                                            capacity=capacity,
+                                            speed=speed)
             solution.check_UB()
             obj = solution.compute_obj
             initial_objs.append(obj)
@@ -204,11 +212,11 @@ def run_GRASP_heuristic(requests, insertion_method, alpha, beta, limit_RCL, num_
             elite_solution = copy.deepcopy(solution)
         pass
 
-    stats = {}
+    specs = {}
     time_elapsed = time.clock() - time_start
-    stats["time"] = (time_elapsed, time_elapsed_it)
-    stats["GRASP iterations"] = GRASP_iterations
-    return elite_solution, stats, initial_objs
+    specs["time"] = (time_elapsed, time_elapsed_it)
+    specs["GRASP iterations"] = GRASP_iterations
+    return elite_solution, specs, initial_objs
 
 
 def test_solution(solution):
@@ -226,7 +234,7 @@ def test_solution(solution):
         print(e)
 
 
-def print_stats(args, solution, stats: Dict, initial_objs: List[int]):
+def print_stats(args, solution, specs: Dict, initial_objs: List[int], stats: Dict[str, List]):
     print()
     print("---------------------------------------------------------")
     print("                     Final stats                         ")
@@ -237,7 +245,7 @@ def print_stats(args, solution, stats: Dict, initial_objs: List[int]):
     all_individual_delays, all_individual_delays_per, all_individual_savings_per, all_individual_earlier_starts, all_individual_earlier_starts_per = solution.all_individual_stats
     nb_clients = solution.global_stats
     print("Number of requests :", nb_requests)
-    print("Number of GRASP iterations :", stats["GRASP iterations"])
+    print("Number of GRASP iterations :", specs["GRASP iterations"])
     print("Best obj :", obj)
     print("Percentage of pooling : %0.1f %%" % (obj*100 / nb_requests))
 
@@ -270,40 +278,126 @@ def print_stats(args, solution, stats: Dict, initial_objs: List[int]):
     print("Minimum pick up time advance : %0.1f sec (+%0.1f %%)" % (min(all_individual_earlier_starts), min(all_individual_earlier_starts_per)))
 
     print()
-    print("Computation time : %d sec" % (round(stats["time"][0])))
-    print("Average computation time by iteration : %0.2f sec" % (round(stats["time"][1], 2) / stats["GRASP iterations"]))
+    print("Computation time : %d sec" % (round(specs["time"][0])))
+    try:
+        print("Average computation time by iteration : %0.2f sec" % (round(specs["time"][1], 2) / specs["GRASP iterations"]))
+    except ZeroDivisionError:
+        print("Average computation time by iteration :  xxx  ")
+
+    stats["pooling"].append(obj*100 / nb_requests)
+    stats["GRASP iterations"].append(specs["GRASP iterations"])
+    stats["av time it"].append(specs["time"][1] / specs["GRASP iterations"])
+    stats["av nb clients taxi"].append(mean(nb_clients))
+    stats["max nb clients 1 taxi"].append(max(nb_clients))
+    stats["av init obj"].append(mean(initial_objs)*100 / nb_requests)
+    stats["av delay sec"].append(mean(all_individual_delays))
+    stats["av delay per"].append(mean(all_individual_delays_per))
+    stats["std delay"].append(stdev(all_individual_delays))
+    stats["max delay sec"].append(max(all_individual_delays))
+    stats["max delay per"].append(max(all_individual_delays_per))
+    stats["min delay sec"].append(min(all_individual_delays))
+    stats["min delay per"].append(min(all_individual_delays_per))
+    stats["av price saving"].append(mean(all_individual_savings_per))
+    stats["max price saving"].append(max(all_individual_savings_per))
+    stats["min price saving"].append(min(all_individual_savings_per))
+    stats["av pu advance sec"].append(mean(all_individual_earlier_starts))
+    stats["av pu advance per"].append(mean(all_individual_earlier_starts_per))
+    stats["std pu advance"].append(stdev(all_individual_earlier_starts))
+    stats["max pu advance sec"].append(max(all_individual_earlier_starts))
+    stats["max pu advance per"].append(max(all_individual_earlier_starts_per))
+    stats["min pu advance sec"].append(min(all_individual_earlier_starts))
+    stats["min pu advance per"].append(min(all_individual_earlier_starts_per))
+    return stats
+
+
+def print_all_stats(args, nb_requests, stats: Dict[str, List]):
+    print()
+    print("---------------------------------------------------------")
+    print("                   Global Final stats                    ")
+    print("---------------------------------------------------------")
+    print()
+
+    print("Number of requests :", nb_requests)
+    print("Number of GRASP iterations :", mean(stats["GRASP iterations"]))
+    print("Percentage of pooling : %0.1f %%" % (mean(stats["pooling"])))
+
+    print()
+    print("Capacity of the taxis : %d" % (args.capacity))
+    print("Speed of the taxis : %d km/h" % (args.speed))
+    print("Average number of clients served by taxi : %0.2f" % (mean(stats["av nb clients taxi"])))
+    print("Maximum number of clients served by 1 taxi : %d" % (mean(stats["max nb clients 1 taxi"])))
+    print("Average objective value of the initial greedy solutiotns %0.1f %%" % (mean(stats["av init obj"])))
+
+    print()
+    print("Average delay for the customers accepting the pooling : %0.1f sec (+%0.1f %%)"
+          % (mean(stats["av delay sec"]), mean(stats["av delay per"])))
+    print("Standard Deviation of the delay : %0.1f sec" % (mean(stats["std delay"])))
+    print("Maximum delay : %0.1f sec (+%0.1f %%)" % (mean(stats["max delay sec"]), mean(stats["max delay per"])))
+    print("Minimum delay : %0.1f sec (+%0.1f %%)" % (mean(stats["min delay sec"]), mean(stats["min delay per"])))
+
+    print()
+    print("Value of alpha : %0.2f" % (args.alpha))
+    print("Average price saving for the customers accepting the pooling : -%0.1f %%"
+          % (mean(stats["av price saving"])))
+    print("Maximum price saving : -%0.1f %%" % (mean(stats["max price saving"])))
+    print("Minimum price saving : -%0.1f %%" % (mean(stats["min price saving"])))
+
+    print()
+    print("Average time advance the clients are pickep up with : %0.1f sec (+%0.1f %%)"
+          % (mean(stats["av pu advance sec"]), mean(stats["av pu advance per"])))
+    print("Standard Deviation of the pick up time advance : %0.1f sec" % (mean(stats["std pu advance"])))
+    print("Maximum pick up time advance : %0.1f sec (+%0.1f %%)" % (mean(stats["max pu advance sec"]), mean(stats["max pu advance per"])))
+    print("Minimum pick up time advance : %0.1f sec (+%0.1f %%)" % (mean(stats["min pu advance sec"]), mean(stats["min pu advance per"])))
+
+    print()
+    print("Average computation time by iteration : %0.2f sec" % (mean(stats["av time it"])))
 
 
 def main():
     args = setup()
     if args.data_saved:
         with open(args.checkpoint_dataset, "rb") as f:
-            requests = pickle.load(f)[:args.test_size]
+            requests = pickle.load(f)
+            #requests = random.sample(requests, args.test_size)
+                
     else:
         dataset = read_dataset(args.input, args.size, args.time_window)
         requests = initialize_requests(dataset, timeframe=args.timeframe)[:args.test_size]
         with open(args.checkpoint_dataset, "wb") as f:
             pickle.dump(requests, f)
-    nb_requests = len(requests)
+        requests = random.sample(requests, args.test_size)
+    #nb_requests = len(requests)
 
-    def handler(signum, frame):
-        raise RuntimeError("End of the %d sec" % (args.time_limit))
+    stats = defaultdict(list)
+    for i in range(args.nb_tests):
+        print()
+        print("     ----    %d   ---" % (i))
+        print()
+        requests = random.sample(requests, args.test_size)
+        nb_requests = len(requests)
 
-    signal.signal(signal.SIGALRM, handler)
-    signal.alarm(args.time_limit)
+        def handler(signum, frame):
+            raise RuntimeError("End of the %d sec" % (args.time_limit))
 
-    print()
-    print("Starting GRASP iterations...")
-    elite_solution, stats, initial_objs = run_GRASP_heuristic(requests=requests,
-                                                              insertion_method=args.insertion_method,
-                                                              alpha=args.alpha,
-                                                              beta=args.beta,
-                                                              limit_RCL=args.limit_RCL,
-                                                              num_local_search=args.num_local_search,
-                                                              nb_attempts_insert=args.nb_attempts_insert,
-                                                              nb_swap=args.nb_swap)
-    test_solution(elite_solution)
-    print_stats(args, elite_solution, stats, initial_objs)
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(args.time_limit)
+
+        print()
+        print("Starting GRASP iterations...")
+        elite_solution, specs, initial_objs = run_GRASP_heuristic(requests=requests,
+                                                                  insertion_method=args.insertion_method,
+                                                                  alpha=args.alpha,
+                                                                  beta=args.beta,
+                                                                  limit_RCL=args.limit_RCL,
+                                                                  num_local_search=args.num_local_search,
+                                                                  nb_attempts_insert=args.nb_attempts_insert,
+                                                                  nb_swap=args.nb_swap,
+                                                                  capacity=args.capacity,
+                                                                  speed=args.speed)
+        test_solution(elite_solution)
+        stats = print_stats(args, elite_solution, specs, initial_objs, stats)
+    
+    print_all_stats(args, elite_solution.nb_requests, stats)
 
 
 if __name__ == "__main__":

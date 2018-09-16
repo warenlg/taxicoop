@@ -14,7 +14,7 @@ IB = "IB"  # heuristic method
 
 class Taxi:
 
-    def __init__(self, request, capacity: int=2, speed: int=40):
+    def __init__(self, request, capacity: int, speed: int):
         """
         list of points and corresponding requests in the route of a Taxi
             in the same order as the taxi travels through them.
